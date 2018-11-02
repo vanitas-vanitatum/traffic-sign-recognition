@@ -1,12 +1,14 @@
 import numpy as np
 import tensorflow as tf
 
-from detector.nets.pvanet import pvanet, unpool, elu_scale_convo
+from common import L2_REGULARIZATION, MOVING_AVERAGE_DECAY
+from detector.nets.pvanet import pvanet, unpool, relu_scale_convo
 
 
 def predict_layer(inputs: tf.Tensor, features: int, kernel_size: int) -> tf.Tensor:
     x = tf.layers.conv2d(inputs, features, kernel_size, 1,
-                         kernel_initializer=tf.keras.initializers.glorot_uniform())
+                         kernel_initializer=tf.keras.initializers.glorot_uniform(),
+                         kernel_regularizer=tf.keras.regularizers.l2(L2_REGULARIZATION))
     x = tf.nn.sigmoid(x)
     return x
 
@@ -31,12 +33,12 @@ def model(images: tf.Tensor, text_scale: int):
             if i == 0:
                 h[i] = f[i]
             else:
-                c1_1 = elu_scale_convo(tf.concat([g[i - 1], f[i]], axis=-1), num_outputs[i], 1, 1)
-                h[i] = elu_scale_convo(c1_1, num_outputs[i], 3, 1)
+                c1_1 = relu_scale_convo(tf.concat([g[i - 1], f[i]], axis=-1), num_outputs[i], 1, 1)
+                h[i] = relu_scale_convo(c1_1, num_outputs[i], 3, 1)
             if i <= 2:
                 g[i] = unpool(h[i])
             else:
-                g[i] = elu_scale_convo(h[i], num_outputs[i], 3, 1)
+                g[i] = relu_scale_convo(h[i], num_outputs[i], 3, 1)
             tf.logging.info('Shape of h_{} {}, g_{} {}'.format(i, h[i].shape, i, g[i].shape))
 
         f_score = predict_layer(g[3], 1, 1)
@@ -107,7 +109,6 @@ def model_fn(features, labels, mode, params):
     input_training_masks = labels["training_masks"]
     text_scale = params["text_scale"]
     learning_rate = params["learning_rate"]
-    moving_average_decay = params["moving_average_decay"]
 
     f_score, f_geometry = model(input_images, text_scale)
     predictions = {
@@ -131,7 +132,7 @@ def model_fn(features, labels, mode, params):
         opt = tf.train.AdamOptimizer(learning_rate)
 
         variable_averages = tf.train.ExponentialMovingAverage(
-            moving_average_decay, tf.train.get_global_step())
+            MOVING_AVERAGE_DECAY, tf.train.get_global_step())
 
         variables_averages_op = variable_averages.apply(tf.trainable_variables())
         train_op = opt.minimize(total_loss, global_step=tf.train.get_global_step())

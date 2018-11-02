@@ -8,8 +8,9 @@ import cv2
 import numpy as np
 import tensorflow as tf
 from shapely.geometry import Polygon
+from imutils.perspective import order_points
 
-from detector import common
+import common
 
 MIN_TEXT_SIZE = 10
 MIN_CROP_SIDE_RATIO = 0.1
@@ -52,30 +53,8 @@ def load_annotation(p: Path) -> Tuple[np.ndarray, ...]:
         return np.array(text_polys, dtype=np.float32), np.array(text_tags, dtype=np.bool)
 
 
-def polygon_area(poly: np.ndarray) -> np.ndarray:
-    """
-    compute area of a polygon
-    :param poly:
-    :return:
-    """
-    edge = [
-        (poly[1][0] - poly[0][0]) * (poly[1][1] + poly[0][1]),
-        (poly[2][0] - poly[1][0]) * (poly[2][1] + poly[1][1]),
-        (poly[3][0] - poly[2][0]) * (poly[3][1] + poly[2][1]),
-        (poly[0][0] - poly[3][0]) * (poly[0][1] + poly[3][1])
-    ]
-    return np.sum(edge) / 2.
-
-
-def check_and_validate_polys(polys, tags, xxx_todo_changeme):
-    """
-    check so that the text poly is in the same direction,
-    and also filter some invalid polygons
-    :param polys:
-    :param tags:
-    :return:
-    """
-    (h, w) = xxx_todo_changeme
+def check_and_validate_polys(polys, tags, spatial_dims):
+    (h, w) = spatial_dims
     if polys.shape[0] == 0:
         return polys
     polys[:, :, 0] = np.clip(polys[:, :, 0], 0, w - 1)
@@ -84,13 +63,7 @@ def check_and_validate_polys(polys, tags, xxx_todo_changeme):
     validated_polys = []
     validated_tags = []
     for poly, tag in zip(polys, tags):
-        p_area = polygon_area(poly)
-        if abs(p_area) < 1:
-            tf.logging.warn('invalid poly')
-            continue
-        if p_area > 0:
-            tf.logging.warn('poly in wrong direction')
-            poly = poly[(0, 3, 2, 1), :]
+        poly = order_points(poly)
         validated_polys.append(poly)
         validated_tags.append(tag)
     return np.array(validated_polys), np.array(validated_tags)
@@ -567,7 +540,7 @@ def generate_rbox(im_size, polys, tags):
 def generator(data_path: bytes, input_size=512, background_ratio=3 / 8):
     image_list = get_images(Path(data_path.decode("utf-8")))
     tf.logging.warn('{} training images in {}'.format(
-        len(image_list), common.DATA_PATH))
+        len(image_list), common.DETECTOR_DATA_PATH))
     index = np.arange(0, len(image_list))
     while True:
         for i in index:
@@ -668,14 +641,14 @@ def input_fn(data_path: Path, train: bool,
 
 def train_input_fn(data_path: Path, batch_size: int = 32):
     def _f():
-        return input_fn(data_path, train=True, batch_size=batch_size, buffer_size=1)
+        return input_fn(data_path, train=True, batch_size=batch_size, buffer_size=batch_size)
 
     return _f
 
 
 def test_input_fn(data_path: Path, batch_size: int = 32):
     def _f():
-        return input_fn(data_path, train=True, batch_size=batch_size, buffer_size=1)
+        return input_fn(data_path, train=True, batch_size=batch_size, buffer_size=batch_size)
 
     return _f
 
