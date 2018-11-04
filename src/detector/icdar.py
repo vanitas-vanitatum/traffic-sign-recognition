@@ -8,7 +8,6 @@ import cv2
 import numpy as np
 import tensorflow as tf
 from shapely.geometry import Polygon
-from imutils.perspective import order_points
 
 import common
 
@@ -29,12 +28,7 @@ def get_images(path: Path) -> List[str]:
     return files_list
 
 
-def load_annotation(p: Path) -> Tuple[np.ndarray, ...]:
-    """
-    load annotation from the text file
-    :param p:
-    :return:
-    """
+def load_annotation(p: Path, img_h: int, img_w: int) -> Tuple[np.ndarray, ...]:
     text_polys = []
     text_tags = []
     with open(p.as_posix(), 'r') as f:
@@ -44,13 +38,31 @@ def load_annotation(p: Path) -> Tuple[np.ndarray, ...]:
             # strip BOM. \ufeff for python3,  \xef\xbb\bf for python2
             line = [i.strip('\ufeff').strip('\xef\xbb\xbf') for i in line]
 
-            x1, y1, x2, y2, x3, y3, x4, y4 = list(map(float, line[:8]))
+            if img_h == img_w == 1024:
+                y1, x1, y2, x2, y3, x3, y4, x4 = list(map(int, line[:8]))
+            else:
+                x1, y1, x2, y2, x3, y3, x4, y4 = list(map(int, line[:8]))
             text_polys.append([[x1, y1], [x2, y2], [x3, y3], [x4, y4]])
             if label == '*' or label == '##':
                 text_tags.append(True)
             else:
                 text_tags.append(False)
         return np.array(text_polys, dtype=np.float32), np.array(text_tags, dtype=np.bool)
+
+
+def polygon_area(poly):
+    """
+    compute area of a polygon
+    :param poly:
+    :return:
+    """
+    edge = [
+        (poly[1][0] - poly[0][0]) * (poly[1][1] + poly[0][1]),
+        (poly[2][0] - poly[1][0]) * (poly[2][1] + poly[1][1]),
+        (poly[3][0] - poly[2][0]) * (poly[3][1] + poly[2][1]),
+        (poly[0][0] - poly[3][0]) * (poly[0][1] + poly[3][1])
+    ]
+    return np.sum(edge) / 2.
 
 
 def check_and_validate_polys(polys, tags, spatial_dims):
@@ -63,7 +75,12 @@ def check_and_validate_polys(polys, tags, spatial_dims):
     validated_polys = []
     validated_tags = []
     for poly, tag in zip(polys, tags):
-        poly = order_points(poly)
+        p_area = polygon_area(poly)
+        if abs(p_area) < 1:
+            tf.logging.info(f'invalid poly: {poly.tolist()}')
+            continue
+        if p_area > 0:
+            poly = poly[(0, 3, 2, 1), :]
         validated_polys.append(poly)
         validated_tags.append(tag)
     return np.array(validated_polys), np.array(validated_tags)
@@ -437,12 +454,6 @@ def generate_rbox(im_size, polys, tags):
         cv2.fillPoly(score_map, shrinked_poly, 1)
         cv2.fillPoly(poly_mask, shrinked_poly, poly_idx + 1)
         # if the poly is too small, then ignore it during training
-        poly_h = min(np.linalg.norm(poly[0] - poly[3]), np.linalg.norm(poly[1] - poly[2]))
-        poly_w = min(np.linalg.norm(poly[0] - poly[1]), np.linalg.norm(poly[2] - poly[3]))
-        if min(poly_h, poly_w) < MIN_TEXT_SIZE:
-            cv2.fillPoly(training_mask, poly.astype(np.int32)[np.newaxis, :, :], 0)
-        if tag:
-            cv2.fillPoly(training_mask, poly.astype(np.int32)[np.newaxis, :, :], 0)
 
         xy_in_poly = np.argwhere(poly_mask == (poly_idx + 1))
         # if geometry == 'RBOX':
@@ -538,95 +549,92 @@ def generate_rbox(im_size, polys, tags):
 
 
 def generator(data_path: bytes, input_size=512, background_ratio=3 / 8):
-    image_list = get_images(Path(data_path.decode("utf-8")))
-    tf.logging.warn('{} training images in {}'.format(
-        len(image_list), common.DETECTOR_DATA_PATH))
-    index = np.arange(0, len(image_list))
-    while True:
-        for i in index:
-            try:
-                im_fn = image_list[i]
-                im = cv2.imread(im_fn)
-                # print im_fn
-                h, w, _ = im.shape
-                txt_fn = Path(im_fn).with_suffix(".txt")
-                if not txt_fn.exists():
-                    tf.logging.warn('text file {} does not exists'.format(txt_fn))
-                    continue
+    dummy_output = np.zeros((input_size, input_size, 3), dtype=np.float32)
+    dummy_geo = np.zeros((input_size // 4, input_size // 4, 5), dtype=np.float32)
+    dummy_score = np.zeros((input_size // 4, input_size // 4, 1), dtype=np.float32)
+    dummy_mask = np.ones((input_size // 4, input_size // 4, 1), dtype=np.float32)
+    is_dummy = np.dtype('int32').type(1)
+    try:
+        im_fn = data_path.decode("utf-8")
+        im = cv2.imread(im_fn)
+        # print im_fn
+        h, w, _ = im.shape
+        txt_fn = Path(im_fn).with_suffix(".txt")
+        text_polys, text_tags = load_annotation(txt_fn, h, w)
 
-                text_polys, text_tags = load_annotation(txt_fn)
+        text_polys, text_tags = check_and_validate_polys(text_polys, text_tags, (h, w))
 
-                text_polys, text_tags = check_and_validate_polys(text_polys, text_tags, (h, w))
+        if np.random.rand() < background_ratio:
+            # crop background
+            im, text_polys, text_tags = crop_area(im, text_polys, text_tags, crop_background=True)
+            if text_polys.shape[0] > 0:
+                # cannot find background
+                return dummy_output, dummy_score, dummy_geo, dummy_mask, is_dummy
+            # pad and resize image
+            new_h, new_w, _ = im.shape
+            max_h_w_i = np.max([new_h, new_w, input_size])
+            im_padded = np.zeros((max_h_w_i, max_h_w_i, 3), dtype=np.uint8)
+            im_padded[:new_h, :new_w, :] = im.copy()
+            im = cv2.resize(im_padded, dsize=(input_size, input_size))
+            score_map = np.zeros((input_size, input_size), dtype=np.uint8)
+            geo_map_channels = 5 if GEOMETRY == 'RBOX' else 8
+            geo_map = np.zeros((input_size, input_size, geo_map_channels), dtype=np.float32)
+            training_mask = np.ones((input_size, input_size), dtype=np.uint8)
+        else:
+            im, text_polys, text_tags = crop_area(im, text_polys, text_tags, crop_background=False)
+            h, w, _ = im.shape
+            # pad the image to the training input size or the longer side of image
+            new_h, new_w, _ = im.shape
+            max_h_w_i = np.max([new_h, new_w, input_size])
+            im_padded = np.zeros((max_h_w_i, max_h_w_i, 3), dtype=np.uint8)
+            im_padded[:new_h, :new_w, :] = im.copy()
+            im = im_padded
+            # resize the image to input size
+            new_h, new_w, _ = im.shape
+            resize_h = input_size
+            resize_w = input_size
+            im = cv2.resize(im, dsize=(resize_w, resize_h))
+            resize_ratio_3_x = resize_w / float(new_w)
+            resize_ratio_3_y = resize_h / float(new_h)
+            text_polys[:, :, 0] *= resize_ratio_3_x
+            text_polys[:, :, 1] *= resize_ratio_3_y
+            new_h, new_w, _ = im.shape
+            score_map, geo_map, training_mask = generate_rbox((new_h, new_w), text_polys, text_tags)
+            
+        return im[:, :, ::-1].astype(np.float32), \
+               score_map[::4, ::4, np.newaxis].astype(np.float32), \
+               geo_map[::4, ::4, :].astype(np.float32), \
+               training_mask[::4, ::4, np.newaxis].astype(np.float32), \
+               np.dtype('int32').type(0)
 
-                if np.random.rand() < background_ratio:
-                    # crop background
-                    im, text_polys, text_tags = crop_area(im, text_polys, text_tags, crop_background=True)
-                    if text_polys.shape[0] > 0:
-                        # cannot find background
-                        continue
-                    # pad and resize image
-                    new_h, new_w, _ = im.shape
-                    max_h_w_i = np.max([new_h, new_w, input_size])
-                    im_padded = np.zeros((max_h_w_i, max_h_w_i, 3), dtype=np.uint8)
-                    im_padded[:new_h, :new_w, :] = im.copy()
-                    im = cv2.resize(im_padded, dsize=(input_size, input_size))
-                    score_map = np.zeros((input_size, input_size), dtype=np.uint8)
-                    geo_map_channels = 5 if GEOMETRY == 'RBOX' else 8
-                    geo_map = np.zeros((input_size, input_size, geo_map_channels), dtype=np.float32)
-                    training_mask = np.ones((input_size, input_size), dtype=np.uint8)
-                else:
-                    im, text_polys, text_tags = crop_area(im, text_polys, text_tags, crop_background=False)
-                    if text_polys.shape[0] == 0:
-                        continue
-                    h, w, _ = im.shape
-                    # pad the image to the training input size or the longer side of image
-                    new_h, new_w, _ = im.shape
-                    max_h_w_i = np.max([new_h, new_w, input_size])
-                    im_padded = np.zeros((max_h_w_i, max_h_w_i, 3), dtype=np.uint8)
-                    im_padded[:new_h, :new_w, :] = im.copy()
-                    im = im_padded
-                    # resize the image to input size
-                    new_h, new_w, _ = im.shape
-                    resize_h = input_size
-                    resize_w = input_size
-                    im = cv2.resize(im, dsize=(resize_w, resize_h))
-                    resize_ratio_3_x = resize_w / float(new_w)
-                    resize_ratio_3_y = resize_h / float(new_h)
-                    text_polys[:, :, 0] *= resize_ratio_3_x
-                    text_polys[:, :, 1] *= resize_ratio_3_y
-                    new_h, new_w, _ = im.shape
-                    score_map, geo_map, training_mask = generate_rbox((new_h, new_w), text_polys, text_tags)
-
-                yield im[:, :, ::-1].astype(np.float32), \
-                      score_map[::4, ::4, np.newaxis].astype(np.float32), \
-                      geo_map[::4, ::4, :].astype(np.float32), \
-                      training_mask[::4, ::4, np.newaxis].astype(np.float32)
-            except Exception as e:
-                import traceback
-                traceback.print_exc()
-                continue
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return dummy_output, dummy_score, dummy_geo, dummy_mask, is_dummy
 
 
 def input_fn(data_path: Path, train: bool,
-             batch_size: int = 32, buffer_size: int = 2048) -> Iterable[Dict[str, tf.Tensor]]:
-    dataset = tf.data.Dataset.from_generator(generator=generator,
-                                             output_shapes=(
-                                                 tf.TensorShape([None, None, 3]),
-                                                 tf.TensorShape([None, None, 1]),
-                                                 tf.TensorShape([None, None, 5]),
-                                                 tf.TensorShape([None, None, 1]),
-                                             ),
-                                             output_types=(tf.float32, tf.float32, tf.float32, tf.float32),
-                                             args=[
-                                                 data_path.as_posix()
-                                             ])
+             batch_size: int = 32, buffer_size: int = 256) -> Iterable[Dict[str, tf.Tensor]]:
+    image_list = get_images(Path(data_path))
+    tf.logging.warn('{} images in {}'.format(
+        len(image_list), common.DETECTOR_DATA_PATH))
+    dataset = tf.data.Dataset.from_tensor_slices(np.asarray(image_list))
+    dataset = dataset.map(map_func=lambda inp: tf.py_func(func=generator, inp=[inp],
+                                                          Tout=[tf.float32, tf.float32, tf.float32, tf.float32,
+                                                                tf.int32]), num_parallel_calls=8)
+    dataset = dataset.filter(lambda _1, _2, _3, _4, is_dummy: tf.equal(is_dummy, 0))
     if train:
         dataset = dataset.shuffle(buffer_size)
     dataset.repeat(1)
     dataset = dataset.batch(batch_size)
+    dataset = dataset.prefetch(buffer_size)
 
     iterator = dataset.make_one_shot_iterator()
-    images_batch, score_batch, geo_batch, mask_batch = iterator.get_next()
+    images_batch, score_batch, geo_batch, mask_batch, dummy_batch = iterator.get_next()
+    images_batch.set_shape([None, None, None, 3])
+    score_batch.set_shape([None, None, None, 1])
+    geo_batch.set_shape([None, None, None, 5])
+    mask_batch.set_shape([None, None, None, 1])
 
     x = {
         "image": images_batch
@@ -641,14 +649,14 @@ def input_fn(data_path: Path, train: bool,
 
 def train_input_fn(data_path: Path, batch_size: int = 32):
     def _f():
-        return input_fn(data_path, train=True, batch_size=batch_size, buffer_size=batch_size)
+        return input_fn(data_path, train=True, batch_size=batch_size)
 
     return _f
 
 
 def test_input_fn(data_path: Path, batch_size: int = 32):
     def _f():
-        return input_fn(data_path, train=True, batch_size=batch_size, buffer_size=batch_size)
+        return input_fn(data_path, train=False, batch_size=batch_size)
 
     return _f
 
