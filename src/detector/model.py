@@ -5,8 +5,10 @@ from common import L2_REGULARIZATION, MOVING_AVERAGE_DECAY
 from detector.nets.pvanet import pvanet, unpool, relu_scale_convo
 
 
-def predict_layer(inputs: tf.Tensor, features: int, kernel_size: int) -> tf.Tensor:
-    x = tf.layers.conv2d(inputs, features, kernel_size, 1,
+def predict_layer(inputs: tf.Tensor, features: int, kernel_size: int, is_training: bool) -> tf.Tensor:
+    x = tf.layers.batch_normalization(inputs, training=is_training)
+    x = tf.nn.relu(x)
+    x = tf.layers.conv2d(x, features, kernel_size, 1,
                          kernel_initializer=tf.keras.initializers.glorot_uniform(),
                          kernel_regularizer=tf.keras.regularizers.l2(L2_REGULARIZATION))
     x = tf.nn.sigmoid(x)
@@ -17,10 +19,10 @@ def normalize_images(images: tf.Tensor) -> tf.Tensor:
     return images / 255
 
 
-def model(images: tf.Tensor, text_scale: int):
+def model(images: tf.Tensor, text_scale: int, is_training: bool):
     images = normalize_images(images)
 
-    end_points = pvanet(images)
+    end_points = pvanet(images, is_training)
     with tf.variable_scope('feature_fusion', values=[end_points.values]):
         f = [end_points['pool5'], end_points['pool4'],
              end_points['pool3'], end_points['pool2']]
@@ -33,17 +35,16 @@ def model(images: tf.Tensor, text_scale: int):
             if i == 0:
                 h[i] = f[i]
             else:
-                c1_1 = relu_scale_convo(tf.concat([g[i - 1], f[i]], axis=-1), num_outputs[i], 1, 1)
-                h[i] = relu_scale_convo(c1_1, num_outputs[i], 3, 1)
+                c1_1 = relu_scale_convo(tf.concat([g[i - 1], f[i]], axis=-1), num_outputs[i], 1, 1, is_training)
+                h[i] = relu_scale_convo(c1_1, num_outputs[i], 3, 1, is_training)
             if i <= 2:
                 g[i] = unpool(h[i])
             else:
-                g[i] = relu_scale_convo(h[i], num_outputs[i], 3, 1)
+                g[i] = relu_scale_convo(h[i], num_outputs[i], 3, 1, is_training)
             tf.logging.info('Shape of h_{} {}, g_{} {}'.format(i, h[i].shape, i, g[i].shape))
-
-        f_score = predict_layer(g[3], 1, 1)
-        geo_map = predict_layer(g[3], 4, 1) * text_scale
-        angle_map = (predict_layer(g[3], 1, 1) - 0.5) * np.pi / 2
+        f_score = predict_layer(g[3], 1, 1, is_training)
+        geo_map = predict_layer(g[3], 4, 1, is_training) * text_scale
+        angle_map = (predict_layer(g[3], 1, 1, is_training) - 0.5) * np.pi / 2
         f_geometry = tf.concat([geo_map, angle_map], axis=-1)
 
     return f_score, f_geometry
@@ -110,7 +111,9 @@ def model_fn(features, labels, mode, params):
     text_scale = params["text_scale"]
     learning_rate = params["learning_rate"]
 
-    f_score, f_geometry = model(input_images, text_scale)
+    is_training = mode == tf.estimator.ModeKeys.TRAIN
+
+    f_score, f_geometry = model(input_images, text_scale, is_training)
     predictions = {
         "score": f_score,
         "geo_maps": f_geometry
@@ -139,12 +142,12 @@ def model_fn(features, labels, mode, params):
         with tf.control_dependencies([variables_averages_op, train_op]):
             train_op = tf.no_op(name="train_op")
 
-        tf.summary.image("input", input_images)
-        tf.summary.image("score_map", input_score_maps)
-        tf.summary.image("score_map_pred", f_score * 255)
-        tf.summary.image("geo_map_0", input_geo_maps[:, :, :, 0:1])
-        tf.summary.image("geo_map_0_pred", f_geometry[:, :, :, 0: 1])
-        tf.summary.image("training_masks", input_training_masks)
+        tf.summary.image("input", input_images[:3])
+        tf.summary.image("score_map", input_score_maps[:3])
+        tf.summary.image("score_map_pred", f_score[:3] * 255)
+        tf.summary.image("geo_map_0", input_geo_maps[:, :, :, 0:1][:3])
+        tf.summary.image("geo_map_0_pred", f_geometry[:, :, :, 0: 1][:3])
+        tf.summary.image("training_masks", input_training_masks[:3])
         tf.summary.scalar("learning_rate", learning_rate)
         tf.summary.scalar("model_loss", model_loss)
         tf.summary.scalar("total_loss", total_loss)
