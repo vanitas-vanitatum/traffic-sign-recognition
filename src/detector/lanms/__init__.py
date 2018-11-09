@@ -10,7 +10,7 @@ if subprocess.call(['make', '-C', BASE_DIR]) != 0:  # return value
 
 
 def merge_quadrangle_n9(polys, thres=0.3, precision=10000):
-    from detector.lanms import merge_quadrangle_n9 as nms_impl
+    from .adaptor import merge_quadrangle_n9 as nms_impl
     if len(polys) == 0:
         return np.array([], dtype='float32')
     p = polys.copy()
