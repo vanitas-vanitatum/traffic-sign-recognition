@@ -1,12 +1,11 @@
 import os
-from collections import OrderedDict
+import time
 
 import cv2
-import imutils
-import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
 
+import common
 from detector import lanms
 from detector.icdar import restore_rectangle
 from detector.model import model
@@ -71,7 +70,8 @@ class Detector(Model):
 
         return im, (ratio_h, ratio_w)
 
-    def detect(self, score_map, geo_map, score_map_thresh=0.8, box_thresh=0.1, nms_thres=0.2):
+    def detect(self, score_map, geo_map, score_map_thresh=common.SCORE_MAP_THRESH,
+               box_thresh=common.BOX_THRESH, nms_thres=common.NMS_TRESH):
         """
         restore text boxes from score map and geo map
         :param score_map:
@@ -97,7 +97,7 @@ class Detector(Model):
         boxes = lanms.merge_quadrangle_n9(boxes.astype('float32'), nms_thres)
 
         if boxes.shape[0] == 0:
-            return None
+            return boxes
 
         # here we filter some low score boxes by the average score map, this is different from the orginal paper
         for i, box in enumerate(boxes):
@@ -127,9 +127,11 @@ class Detector(Model):
         im_resized, (ratio_h, ratio_w) = self.resize_image(img)
         score, geometry = self.sess.run(
             [self._f_score, self._f_geometry],
-            feed_dict={self._inputs: [im_resized[..., ::-1]]})
+            feed_dict={self._inputs: [im_resized]})
 
         boxes = self.detect(score_map=score, geo_map=geometry)
+        if boxes.shape[0] == 0:
+            return boxes
         scores = boxes[:, 8].reshape(-1)
         boxes = boxes[:, :8].reshape((-1, 4, 2))
         boxes[:, :, 0] /= ratio_w

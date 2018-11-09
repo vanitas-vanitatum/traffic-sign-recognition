@@ -8,3 +8,8 @@ MOVING_AVERAGE_DECAY = 0.997
 
 if not MODELS_PATH.exists():
     MODELS_PATH.mkdir(parents=True)
+
+
+SCORE_MAP_THRESH = 0.5
+NMS_TRESH = 0.1
+BOX_THRESH = 0.05
