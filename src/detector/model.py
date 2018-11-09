@@ -5,13 +5,13 @@ from common import L2_REGULARIZATION, MOVING_AVERAGE_DECAY
 from detector.nets.pvanet import pvanet, unpool, relu_scale_convo
 
 
-def predict_layer(inputs: tf.Tensor, features: int, kernel_size: int, is_training: bool) -> tf.Tensor:
+def predict_layer(inputs: tf.Tensor, features: int, kernel_size: int, is_training: bool, name: str) -> tf.Tensor:
     x = tf.layers.batch_normalization(inputs, training=is_training)
     x = tf.nn.relu(x)
     x = tf.layers.conv2d(x, features, kernel_size, 1,
                          kernel_initializer=tf.keras.initializers.glorot_uniform(),
                          kernel_regularizer=tf.keras.regularizers.l2(L2_REGULARIZATION))
-    x = tf.nn.sigmoid(x)
+    x = tf.nn.sigmoid(x, name=name)
     return x
 
 
@@ -42,10 +42,10 @@ def model(images: tf.Tensor, text_scale: int, is_training: bool):
             else:
                 g[i] = relu_scale_convo(h[i], num_outputs[i], 3, 1, is_training)
             tf.logging.info('Shape of h_{} {}, g_{} {}'.format(i, h[i].shape, i, g[i].shape))
-        f_score = predict_layer(g[3], 1, 1, is_training)
-        geo_map = predict_layer(g[3], 4, 1, is_training) * text_scale
-        angle_map = (predict_layer(g[3], 1, 1, is_training) - 0.5) * np.pi / 2
-        f_geometry = tf.concat([geo_map, angle_map], axis=-1)
+        f_score = predict_layer(g[3], 1, 1, is_training, name="score")
+        geo_map = predict_layer(g[3], 4, 1, is_training, name="geo_map") * text_scale
+        angle_map = (predict_layer(g[3], 1, 1, is_training, name="angle_map") - 0.5) * np.pi / 2
+        f_geometry = tf.concat([geo_map, angle_map], axis=-1, name="geometry")
 
     return f_score, f_geometry
 
@@ -105,9 +105,6 @@ def loss(y_true_cls, y_pred_cls,
 
 def model_fn(features, labels, mode, params):
     input_images = features["image"]
-    input_score_maps = labels["score_maps"]
-    input_geo_maps = labels["geo_maps"]
-    input_training_masks = labels["training_masks"]
     text_scale = params["text_scale"]
     learning_rate = params["learning_rate"]
 
@@ -124,6 +121,9 @@ def model_fn(features, labels, mode, params):
             predictions=predictions
         )
     else:
+        input_score_maps = labels["score_maps"]
+        input_geo_maps = labels["geo_maps"]
+        input_training_masks = labels["training_masks"]
         model_loss = loss(input_score_maps, f_score,
                           input_geo_maps, f_geometry,
                           input_training_masks)
