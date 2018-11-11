@@ -1,72 +1,124 @@
-import skimage as ski
-from skimage import io
+import json
+import os
+import tqdm
+import cv2
+
+from src.data_preprocessing.base_data_interface import MultipleDatasetsInterface, SingleDatasetInterface
 
 
-class DataInterface:
+class TsinghuaInterface(SingleDatasetInterface):
 
-    def __init__(self, target_resolution):
-        self.target_resolution = target_resolution
+    def __init__(self, target_resolution, source_data_path, source_annotations_path, save_image=True, save_annot=True):
+        super().__init__(target_resolution, source_data_path, source_annotations_path)
+        self.save_image = save_image
+        self.save_annot = save_annot
+
+        with open(f'{self.source_annotations_path}/annotations.json') as f:
+            self.annotations = json.load(f)
+            self.annotations = self.annotations['imgs']
+
+        self.sample_ids = {os.path.splitext(item)[0] : item for item in os.listdir(self.source_data_path)}
 
     def __len__(self):
-        raise NotImplementedError
-
-    @staticmethod
-    def save_sample(save_path, sample_id, image, bboxes):
-        ski.io.imsave(f'{save_path}/{sample_id}.jpg', image)
-        lines = []
-        for bbox in bboxes:
-            line = ''
-            for point_x, point_y in bbox:
-                line += f'{point_x},{point_y},'
-            lines.append(line)
-        with open(f'{save_path}/{sample_id}.txt') as f:
-            f.writelines(lines)
+        return len(self.sample_ids)
 
     def __iter__(self):
-        raise NotImplementedError
-
-    def _process_sample(self, raw_sample, raw_annotation):
-        raise NotImplementedError
-
-    def process_dataset(self, destination_path, initial_id=0):
-        raise NotImplementedError
-
-
-class MultipleDatasetsInterface(DataInterface):
-
-    def __init__(self, target_resolution, single_datasets):
-        super().__init__(target_resolution)
-        self.datasets = single_datasets
-
-    def __len__(self):
-        return sum(len(dset) for dset in self.datasets)
-
-    def process_dataset(self, destination_path, initial_id=0):
-        sample_id = 0
-        for dataset in self.datasets:
-            dataset.process_dataset(destination_path, initial_id=sample_id)
-            sample_id = len(dataset)
-
-    def __iter__(self):
-        for dataset in self.datasets:
-            for sample in dataset:
-                yield sample
-
-class SingleDatasetInterface(DataInterface):
-
-    def __init__(self, target_resolution, source_data_path, source_annotations_path):
-        super().__init__(target_resolution)
-        self.source_data_path = source_data_path
-        self.source_annotations_path = source_annotations_path
-
-
-class TsinghuaInterface(DataInterface):
-    def __len__(self):
-        pass
+        for sample_id in self.sample_ids:
+            #sample = ski.io.imread(f'{self.source_data_path}/{self.sample_ids[sample_id]}')
+            sample = cv2.imread(f'{self.source_data_path}/{self.sample_ids[sample_id]}')
+            annot = self.annotations[sample_id]['objects']
+            sample, annot = self._process_sample(sample, annot)
+            yield sample, annot
 
     def _process_sample(self, raw_sample, raw_annotation):
         size = raw_sample.shape[:2]
-        ratio
+        scale_ratio = self.target_resolution / max(size)
+
+        im = cv2.resize(raw_sample, (0,0), fx=scale_ratio, fy=scale_ratio) if self.save_image else None
+
+        annotations = []
+        for annot in raw_annotation:
+            b = annot['bbox']
+            points = [b['xmin'], b['ymin'], b['xmax'], b['ymin'], b['xmax'], b['ymax'], b['xmin'], b['ymax']]
+            points_scaled = [int(coord * scale_ratio) for coord in points]
+            line = ','.join(str(p) for p in points_scaled)+','
+            annotations.append(line)
+        return im, '\n'.join(annotations)
 
     def process_dataset(self, destination_path, initial_id=0):
-        pass
+        for current_id, (sample, annotation) in tqdm.tqdm(enumerate(self, initial_id), desc='tsinghua', total=len(self)):
+            # ski.io.imsave(f'{destination_path}/img_{current_id}.jpg', sample)
+            #cv2.imwrite(f'{destination_path}/img_{current_id}.jpg', sample)
+            # with open(f'{destination_path}/img_{current_id}.txt', 'w') as f:
+            #     f.write(annotation)
+            self.save_detection_sample(destination_path, current_id, sample, annotation,
+                                       self.save_image, self.save_annot)
+
+
+class TsignDetInterface(SingleDatasetInterface):
+
+    def __init__(self, target_resolution, source_data_path, source_annotations_path, save_image=True, save_annot=True):
+        super().__init__(target_resolution, source_data_path, source_annotations_path)
+        self.save_image = save_image
+        self.save_annot = save_annot
+
+        self.annotations = dict()
+        for annot_file in os.listdir(self.source_annotations_path):
+            with open(f'{self.source_annotations_path}/{annot_file}') as f:
+                self.annotations[os.path.splitext(annot_file)[0]] = f.read()
+
+        self.sample_ids = {os.path.splitext(item)[0]: item for item in os.listdir(self.source_data_path)}
+
+    def __len__(self):
+        return len(self.sample_ids)
+
+    def __iter__(self):
+        for sample_id in self.sample_ids:
+            # sample = ski.io.imread(f'{self.source_data_path}/{self.sample_ids[sample_id]}')
+            sample = cv2.imread(f'{self.source_data_path}/{self.sample_ids[sample_id]}')
+            annot = self.annotations[sample_id]
+            sample, annot = self._process_sample(sample, annot)
+            yield sample, annot
+
+    def _process_sample(self, raw_sample, raw_annotation):
+        size = raw_sample.shape[:2]
+        scale_ratio = self.target_resolution / max(size)
+
+        im = cv2.resize(raw_sample, (0,0), fx=scale_ratio, fy=scale_ratio) if self.save_image else None
+
+        annotations = []
+        for annot in raw_annotation.split('\n'):
+            annot = annot.strip()
+            if annot and annot.count(',') == 7:
+                annot = ','.join(str(int(int(x)*scale_ratio)) for x in annot.split(','))
+                annotations.append(annot+',')
+        return im, '\n'.join(annotations)
+
+    def process_dataset(self, destination_path, initial_id=0):
+        for current_id, (sample, annotation) in tqdm.tqdm(enumerate(self, initial_id), desc='TsignDet', total=len(self)):
+            #ski.io.imsave(f'{destination_path}/img_{current_id}.jpg', sample)
+            #cv2.imwrite(f'{destination_path}/img_{current_id}.jpg', sample)
+            # with open(f'{destination_path}/img_{current_id}.txt', 'w') as f:
+            #     f.write(annotation)
+            self.save_detection_sample(destination_path, current_id, sample, annotation,
+                                       self.save_image, self.save_annot)
+
+
+if __name__ == '__main__':
+    res = 1024
+    DATA_PATH = '/home/mkosturek/pwr/masters/sem2/computer_vision/traffic-sign-recognition/data/'
+    TSIGNDET_PATH = '/data_unzipped/detection/TsignDet/'
+    TSINGHUA_PATH = '/data_unzipped/detection/tsinghua/'
+
+    tsinghua_test = TsinghuaInterface(res, DATA_PATH + TSINGHUA_PATH + 'test/', DATA_PATH + TSINGHUA_PATH)
+    tsigndet_test = TsignDetInterface(res, DATA_PATH + TSIGNDET_PATH + 'test/', DATA_PATH + TSIGNDET_PATH + 'test_annotation/')
+
+    test_dset = MultipleDatasetsInterface(res, [tsigndet_test, tsinghua_test])
+    test_dset.process_dataset(DATA_PATH + 'detection/test/')
+
+    tsinghua_train = TsinghuaInterface(res, DATA_PATH + TSINGHUA_PATH + 'train/', DATA_PATH + TSINGHUA_PATH)
+    tsigndet_train = TsignDetInterface(res, DATA_PATH + TSIGNDET_PATH + 'train/',
+                                       DATA_PATH + TSIGNDET_PATH + 'train_annotation/')
+
+    train_dset = MultipleDatasetsInterface(res, [tsigndet_train, tsinghua_train])
+    train_dset.process_dataset(DATA_PATH + 'detection/train/')
