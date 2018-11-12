@@ -1,12 +1,12 @@
-import src.data_preprocessing.rule_engine as reng
+import src.data_preprocessing.rule_engine as r
 
-FLIP_H = reng.Flip('horizontal')
-FLIP_V = reng.Flip('vertical')
-ROT_90 = reng.Rotate('90')
-ROT_180 = reng.Rotate('180')
-ROT_270 = reng.Rotate('270')
-TRA_BACK = reng.Transpose('\\')
-TRA_FRONT = reng.Transpose('/')
+FLIP_H = r.Flip('horizontal')
+FLIP_V = r.Flip('vertical')
+ROT_90 = r.Rotate('90')
+ROT_180 = r.Rotate('180')
+ROT_270 = r.Rotate('270')
+TRA_BACK = r.Transpose('\\')
+TRA_FRONT = r.Transpose('/')
 
 
 FULLY_SYMMETRIC_INFERENCES = [FLIP_H, FLIP_V, ROT_90, ROT_180, ROT_270, TRA_BACK, TRA_FRONT]
@@ -25,39 +25,42 @@ CLASSES = ['bend_left', 'bend_right', 'children', 'closed_both_directions',
            'straight_or_left_only', 'straight_or_right_only', 'traffic_lights']
 
 
-RULESET = [reng.IfTrue().then(reng.Identity()),
-           reng.IfClassIs('straight_or_left_only').then(FLIP_H + reng.ChangeLabel('straignt_or_right_only')),
-           reng.IfClassIs('straight_or_right_only').then(FLIP_H + reng.ChangeLabel('straignt_or_left_only')),
+RULESET = [(r.IfDatasetIsnt('TSRD') * r.IfClassIn(['bend_left', 'bend_right', 'stop'])).then(r.Identity()),
+           r.IfClassIn(['children', 'closed_both_directions', 'give_way', 'hazard', 'left_only', 'no_entry',
+                        'priority_road', 'right_only', 'roadworks', 'roundabout', 'straight_ahead_only',
+                        'straight_or_left_only', 'straight_or_right_only', 'traffic_lights']).then(r.Identity()),
 
-           reng.IfClassIs('bend_left').then(FLIP_H + reng.ChangeLabel('bend_right')),
-           reng.IfClassIs('bend_right').then(FLIP_H + reng.ChangeLabel('bend_left')),
+           r.IfClassIs('straight_or_left_only').then(FLIP_H + r.ChangeLabel('straight_or_right_only')),
+           r.IfClassIs('straight_or_right_only').then(FLIP_H + r.ChangeLabel('straight_or_left_only')),
 
-           reng.IfClassIs('right_only').then(FLIP_H + reng.ChangeLabel('left_only')),
-           reng.IfClassIs('right_only').then(ROT_180 + reng.ChangeLabel('left_only')),
-           reng.IfClassIs('right_only').then(ROT_270 + reng.ChangeLabel('straight_ahead_only')),
-           reng.IfClassIs('right_only').then(TRA_FRONT + reng.ChangeLabel('straight_ahead_only')),
-           reng.IfClassIs('right_only').then(FLIP_V),
+           (r.IfDatasetIsnt('TSRD') * r.IfClassIs('bend_left')).then(FLIP_H + r.ChangeLabel('bend_right')),
+           (r.IfDatasetIsnt('TSRD') * r.IfClassIs('bend_right')).then(FLIP_H + r.ChangeLabel('bend_left')),
 
-           reng.IfClassIs('left_only').then(FLIP_H + reng.ChangeLabel('right_only')),
-           reng.IfClassIs('left_only').then(ROT_180 + reng.ChangeLabel('right_only')),
-           reng.IfClassIs('left_only').then(ROT_90 + reng.ChangeLabel('straight_ahead_only')),
-           reng.IfClassIs('left_only').then(TRA_BACK + reng.ChangeLabel('straight_ahead_only')),
-           reng.IfClassIs('left_only').then(FLIP_V),
+           r.IfClassIs('right_only').then(FLIP_H + r.ChangeLabel('left_only')),
+           (r.IfDatasetIs('Belgium') * r.IfClassIs('right_only')).then(ROT_180 + r.ChangeLabel('left_only')),
+           (r.IfDatasetIs('Belgium') * r.IfClassIs('right_only')).then(ROT_270 + r.ChangeLabel('straight_ahead_only')),
+           (r.IfDatasetIs('Belgium') * r.IfClassIs('right_only')).then(TRA_FRONT + r.ChangeLabel('straight_ahead_only')),
+           (r.IfDatasetIs('Belgium') * r.IfClassIs('right_only')).then(FLIP_V),
 
-           reng.IfClassIs('straight_ahead_only').then(ROT_90 + reng.ChangeLabel('right_only')),
-           reng.IfClassIs('straight_ahead_only').then(ROT_270 + reng.ChangeLabel('left_only')),
-           reng.IfClassIs('straight_ahead_only').then(TRA_FRONT + reng.ChangeLabel('right_only')),
-           reng.IfClassIs('straight_ahead_only').then(TRA_BACK + reng.ChangeLabel('left_only')),
-           reng.IfClassIs('straight_ahead_only').then(FLIP_H),
+           r.IfClassIs('left_only').then(FLIP_H + r.ChangeLabel('right_only')),
+           (r.IfDatasetIs('Belgium') * r.IfClassIs('left_only')).then(ROT_180 + r.ChangeLabel('right_only')),
+           (r.IfDatasetIs('Belgium') * r.IfClassIs('left_only')).then(ROT_90 + r.ChangeLabel('straight_ahead_only')),
+           (r.IfDatasetIs('Belgium') * r.IfClassIs('left_only')).then(TRA_BACK + r.ChangeLabel('straight_ahead_only')),
+           (r.IfDatasetIs('Belgium') * r.IfClassIs('left_only')).then(FLIP_V),
 
-           reng.IfClassIs('traffic_lights').then(FLIP_H),
-           reng.IfClassIs('give_way').then(FLIP_H),
-           reng.IfClassIs('hazard').then(FLIP_H)
-          ]
+           r.IfClassIs('straight_ahead_only').then(ROT_90 + r.ChangeLabel('right_only')),
+           r.IfClassIs('straight_ahead_only').then(ROT_270 + r.ChangeLabel('left_only')),
+           r.IfClassIs('straight_ahead_only').then(TRA_FRONT + r.ChangeLabel('right_only')),
+           r.IfClassIs('straight_ahead_only').then(TRA_BACK + r.ChangeLabel('left_only')),
+           r.IfClassIs('straight_ahead_only').then(FLIP_H),
+
+           r.IfClassIs('traffic_lights').then(FLIP_H),
+           r.IfClassIs('give_way').then(FLIP_H),
+           r.IfClassIs('hazard').then(FLIP_H)]
 RULESET = (
         RULESET
-        + spawn_rules_common_predicate(reng.IfClassIs('priority_road'), FULLY_SYMMETRIC_INFERENCES)
-        + spawn_rules_common_predicate(reng.IfClassIs('closed_both_directions'), FULLY_SYMMETRIC_INFERENCES)
-        + spawn_rules_common_predicate(reng.IfClassIs('no_entry'), VERT_HOR_SYMMETRIC_INFERENCES)
-        + spawn_rules_common_predicate(reng.IfClassIs('roundabout'), FULLY_SYMMETRIC_INFERENCES)
+        + spawn_rules_common_predicate(r.IfClassIs('priority_road'), FULLY_SYMMETRIC_INFERENCES)
+        + spawn_rules_common_predicate(r.IfClassIs('closed_both_directions'), FULLY_SYMMETRIC_INFERENCES)
+        + spawn_rules_common_predicate(r.IfClassIs('no_entry'), VERT_HOR_SYMMETRIC_INFERENCES)
+        + spawn_rules_common_predicate(r.IfClassIs('roundabout'), FULLY_SYMMETRIC_INFERENCES)
 )

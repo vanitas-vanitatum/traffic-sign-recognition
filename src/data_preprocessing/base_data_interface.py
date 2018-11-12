@@ -8,9 +8,6 @@ Sample = namedtuple('Sample', ['image', 'label', 'origin'])
 
 class DataInterface:
 
-    def __init__(self, target_resolution):
-        self.target_resolution = target_resolution
-
     def __len__(self):
         raise NotImplementedError
 
@@ -39,8 +36,7 @@ class DataInterface:
 
 class MultipleDatasetsInterface(DataInterface):
 
-    def __init__(self, target_resolution, single_datasets):
-        super().__init__(target_resolution)
+    def __init__(self, single_datasets):
         self.datasets = single_datasets
 
     def __len__(self):
@@ -60,7 +56,14 @@ class MultipleDatasetsInterface(DataInterface):
 
 class SingleDatasetInterface(DataInterface):
 
-    def __init__(self, target_resolution, source_data_path, source_annotations_path):
-        super().__init__(target_resolution)
+    def __init__(self, source_data_path):
+        super().__init__()
         self.source_data_path = source_data_path
+
+
+class DetectionDataInterface(SingleDatasetInterface):
+
+    def __init__(self, target_resolution, source_data_path, source_annotations_path):
+        super().__init__(source_data_path)
+        self.target_resolution = target_resolution
         self.source_annotations_path = source_annotations_path

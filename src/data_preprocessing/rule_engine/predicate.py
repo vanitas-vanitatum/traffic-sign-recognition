@@ -41,6 +41,23 @@ class IfDatasetIs(Predicate):
     def __call__(self, sample: Sample) -> bool:
         return sample.origin == self.dataset_name
 
+
+class IfDatasetIsnt(Predicate):
+
+    def __init__(self, dataset_name):
+        self.dataset_name = dataset_name
+
+    def __call__(self, sample: Sample) -> bool:
+        return sample.origin != self.dataset_name
+
+
+class IfClassIn(Predicate):
+    def __init__(self, classes):
+        self.classes = classes
+
+    def __call__(self, sample: Sample) -> bool:
+        return sample.label in self.classes
+
 class IfTrue(Predicate):
 
     def __call__(self, sample: Sample) -> bool:

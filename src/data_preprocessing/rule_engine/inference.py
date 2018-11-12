@@ -69,7 +69,7 @@ class Transpose(Inference):
     def __call__(self, sample: Sample) -> Sample:
         img = sample.image
         if self.how == '/':
-            img = cv2.flip(img, 1)
+            img = cv2.rotate(img, cv2.ROTATE_180)
         transposed = cv2.transpose(img)
         return Sample(transposed, sample.label, self._origin_name(sample))
 
@@ -77,3 +77,8 @@ class Transpose(Inference):
 class Identity(Inference):
     def __call__(self, sample: Sample) -> Sample:
         return sample
+
+
+class Ignore(Inference):
+    def __call__(self, sample: Sample) -> Sample:
+        return None

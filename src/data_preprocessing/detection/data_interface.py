@@ -3,10 +3,10 @@ import os
 import tqdm
 import cv2
 
-from src.data_preprocessing.base_data_interface import MultipleDatasetsInterface, SingleDatasetInterface
+from src.data_preprocessing.base_data_interface import MultipleDatasetsInterface, DetectionDataInterface
 
 
-class TsinghuaInterface(SingleDatasetInterface):
+class TsinghuaInterface(DetectionDataInterface):
 
     def __init__(self, target_resolution, source_data_path, source_annotations_path, save_image=True, save_annot=True):
         super().__init__(target_resolution, source_data_path, source_annotations_path)
@@ -55,7 +55,7 @@ class TsinghuaInterface(SingleDatasetInterface):
                                        self.save_image, self.save_annot)
 
 
-class TsignDetInterface(SingleDatasetInterface):
+class TsignDetInterface(DetectionDataInterface):
 
     def __init__(self, target_resolution, source_data_path, source_annotations_path, save_image=True, save_annot=True):
         super().__init__(target_resolution, source_data_path, source_annotations_path)
