@@ -1,0 +1,6 @@
+paths:
+  detector: ../production/models/detector.pb
+  classifier: ../production/models/classifier.pb
+  label_encoder: ../production/models/label_encoder.pkl
+
+extractor: standard_extractor

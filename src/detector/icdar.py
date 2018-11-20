@@ -5,15 +5,25 @@ from pathlib import Path
 from typing import *
 
 import cv2
+import imgaug.augmenters as iaa
 import numpy as np
 import tensorflow as tf
 from shapely.geometry import Polygon
 
 import common
 
-MIN_TEXT_SIZE = 10
 MIN_CROP_SIDE_RATIO = 0.1
 GEOMETRY = "RBOX"
+
+augmenters = iaa.Sequential([
+    iaa.JpegCompression((20, 80)),
+    iaa.GaussianBlur((0.5, 1.5)),
+    iaa.OneOf([
+        iaa.Add((10, 50)),
+        iaa.Multiply((0.5, 1.5)),
+    ]),
+    iaa.Grayscale((0, 1))
+], random_order=True)
 
 
 def get_images(path: Path) -> List[str]:
@@ -600,7 +610,7 @@ def generator(data_path: bytes, input_size=512, background_ratio=3 / 8):
             text_polys[:, :, 1] *= resize_ratio_3_y
             new_h, new_w, _ = im.shape
             score_map, geo_map, training_mask = generate_rbox((new_h, new_w), text_polys, text_tags)
-            
+        im = augmenters.augment_image(im)
         return im[:, :, ::-1].astype(np.float32), \
                score_map[::4, ::4, np.newaxis].astype(np.float32), \
                geo_map[::4, ::4, :].astype(np.float32), \
