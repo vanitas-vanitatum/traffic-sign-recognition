@@ -1,4 +1,3 @@
-import numpy as np
 import tensorflow as tf
 
 import common
@@ -93,15 +92,8 @@ def shuffle_block(inputs: tf.Tensor, features: int, is_training: bool, stride: i
     return res
 
 
-def model_fn(features, labels, mode, params):
-    num_classes = params["num_classes"]
-    learning_rate = params.get("learning_rate", 0.001)
-
-    labels = labels["label"]
-    net = features["image"]
-
-    is_training = mode == tf.estimator.ModeKeys.TRAIN
-    net = initial_block(net, 24, is_training)
+def construct_model(inputs: tf.Tensor, is_training: bool, num_classes: int) -> tf.Tensor:
+    net = initial_block(inputs, 24, is_training)
 
     repetitions = [4, 8, 4]
     features = [48, 96, 192]
@@ -115,56 +107,4 @@ def model_fn(features, labels, mode, params):
     net = tf.layers.dense(net, num_classes,
                           kernel_initializer=tf.keras.initializers.he_normal(),
                           kernel_regularizer=tf.keras.regularizers.l2(common.L2_REGULARIZATION))
-
-    logits = net
-    y_pred = tf.nn.softmax(logits=logits)
-
-    y_pred_cls = tf.argmax(y_pred, axis=1)
-    if mode == tf.estimator.ModeKeys.PREDICT:
-        spec = tf.estimator.EstimatorSpec(mode=mode, predictions=y_pred_cls)
-    else:
-        cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits,
-                                                                       labels=labels)
-        loss = tf.reduce_mean(cross_entropy)
-
-        total_loss = tf.add_n([loss] + tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES))
-        optimizer = tf.train.AdamOptimizer(learning_rate)
-
-        variable_averages = tf.train.ExponentialMovingAverage(
-            common.MOVING_AVERAGE_DECAY, tf.train.get_global_step())
-
-        variables_averages_op = variable_averages.apply(tf.trainable_variables())
-
-        with tf.control_dependencies(tf.get_collection(tf.GraphKeys.UPDATE_OPS)):
-            train_op = optimizer.minimize(
-                loss=total_loss, global_step=tf.train.get_global_step()
-            )
-
-        with tf.control_dependencies([variables_averages_op, train_op]):
-            train_op = tf.no_op(name="train_op")
-
-        metrics = {
-            "accuracy": tf.metrics.accuracy(labels, y_pred_cls),
-            "precision": tf.metrics.precision(labels, y_pred_cls),
-            "recall": tf.metrics.recall(labels, y_pred_cls),
-            "false_positives": tf.metrics.false_positives(labels, y_pred_cls),
-            "false_negatives": tf.metrics.false_positives(labels, y_pred_cls)
-        }
-
-        tf.summary.histogram("predictions", y_pred)
-        tf.summary.scalar("unregularised_loss", loss)
-        tf.summary.scalar("learning_rate", learning_rate)
-
-        spec = tf.estimator.EstimatorSpec(
-            mode=mode,
-            loss=total_loss,
-            train_op=train_op,
-            predictions=y_pred_cls,
-            eval_metric_ops=metrics
-        )
-
-    tf.logging.info("ShuffleNet params: {}".format(np.prod(sum([
-        np.prod(var.get_shape().as_list()) for var in tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
-    ]))))
-
-    return spec
+    return net

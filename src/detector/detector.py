@@ -1,15 +1,13 @@
-import os
-import time
-
 import cv2
+import imutils
 import numpy as np
 import tensorflow as tf
 
 import common
 from detector import lanms
 from detector.icdar import restore_rectangle
-from detector.model import model
 from model import Model
+from utils.graph_utils import load_graph
 
 
 class Detector(Model):
@@ -26,20 +24,12 @@ class Detector(Model):
         self.initiate()
 
     def initiate(self):
-        with self._graph.as_default():
-            self._inputs = tf.placeholder(tf.float32, shape=[None, None, None, 3], name='input_images')
-            global_step = tf.get_variable('global_step', [], dtype=tf.int64, initializer=tf.constant_initializer(0),
-                                          trainable=False)
+        self._graph: tf.Graph = load_graph(self._snapshot_path)
+        self.sess = tf.Session(graph=self._graph)
 
-            self._f_score, self._f_geometry = model(self._inputs, 512, is_training=True)
-
-            variable_averages = tf.train.ExponentialMovingAverage(0.997, global_step)
-            saver = tf.train.Saver(variable_averages.variables_to_restore())
-            self.sess = tf.Session(graph=self._graph)
-            ckpt_state = tf.train.get_checkpoint_state(self._snapshot_path)
-            model_path = os.path.join(self._snapshot_path, os.path.basename(ckpt_state.model_checkpoint_path))
-            print('Restore from {}'.format(model_path))
-            saver.restore(self.sess, model_path)
+        self._inputs = self._graph.get_tensor_by_name("import/input_images:0")
+        self._f_score = self._graph.get_tensor_by_name("import/feature_fusion/score:0")
+        self._f_geometry = self._graph.get_tensor_by_name("import/feature_fusion/geometry:0")
 
     def resize_image(self, im, max_side_len=2400):
         """
@@ -123,12 +113,15 @@ class Detector(Model):
         return np.asarray(results)
 
     def predict_single_frame(self, x: np.ndarray) -> np.ndarray:
-        img = x
+        original_h, original_w, _ = x.shape
+        partial = x[:original_h // 2, original_w // 2:]
+        partial_h, partial_w, _ = partial.shape
+        partial = imutils.resize(partial, width=original_w, height=original_h)
+        img = partial
         im_resized, (ratio_h, ratio_w) = self.resize_image(img)
         score, geometry = self.sess.run(
             [self._f_score, self._f_geometry],
             feed_dict={self._inputs: [im_resized]})
-
         boxes = self.detect(score_map=score, geo_map=geometry)
         if boxes.shape[0] == 0:
             return boxes
@@ -137,10 +130,15 @@ class Detector(Model):
         boxes[:, :, 0] /= ratio_w
         boxes[:, :, 1] /= ratio_h
 
+        resize_ratio_h = im_resized.shape[0] / float(partial_h)
+        resize_ratio_w = im_resized.shape[1] / float(partial_w)
+
+        boxes[:, :, 0] /= resize_ratio_w
+        boxes[:, :, 0] += original_w // 2
+        boxes[:, :, 1] /= resize_ratio_h
+
         final_boxes = []
         for box, score in zip(boxes, scores):
             box = self.sort_poly(box.astype(np.int32))
-            if np.linalg.norm(box[0] - box[1]) < 5 or np.linalg.norm(box[3] - box[0]) < 5:
-                continue
             final_boxes.append(box)
         return np.asarray(final_boxes)

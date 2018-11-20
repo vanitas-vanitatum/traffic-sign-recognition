@@ -10,19 +10,6 @@
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
-#
-# Copyright 2015 The TensorFlow Authors. All Rights Reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
 # limitations under the License.
 # ==============================================================================
 r"""Converts checkpoint variables into Const ops in a standalone GraphDef file.
@@ -51,7 +38,6 @@ from __future__ import division
 from __future__ import print_function
 
 import argparse
-import re
 import sys
 
 from google.protobuf import text_format
@@ -67,23 +53,7 @@ from tensorflow.python.platform import gfile
 from tensorflow.python.saved_model import loader
 from tensorflow.python.saved_model import tag_constants
 from tensorflow.python.tools import saved_model_utils
-from tensorflow.python.training import checkpoint_management
 from tensorflow.python.training import saver as saver_lib
-
-
-def _has_no_variables(sess):
-    """Determines if the graph has any variables.
-
-    Args:
-      sess: TensorFlow Session.
-
-    Returns:
-      Bool.
-    """
-    for op in sess.graph.get_operations():
-        if op.type.startswith("Variable") or op.type.endswith("VariableOp"):
-            return False
-    return True
 
 
 def freeze_graph_with_def_protos(input_graph_def,
@@ -101,42 +71,12 @@ def freeze_graph_with_def_protos(input_graph_def,
                                  input_saved_model_dir=None,
                                  saved_model_tags=None,
                                  checkpoint_version=saver_pb2.SaverDef.V2):
-    """Converts all variables in a graph and checkpoint into constants.
-
-    Args:
-      input_graph_def: A `GraphDef`.
-      input_saver_def: A `SaverDef` (optional).
-      input_checkpoint: The prefix of a V1 or V2 checkpoint, with V2 taking
-        priority.  Typically the result of `Saver.save()` or that of
-        `tf.train.latest_checkpoint()`, regardless of sharded/non-sharded or
-        V1/V2.
-      output_node_names: The name(s) of the output nodes, comma separated.
-      restore_op_name: Unused.
-      filename_tensor_name: Unused.
-      output_graph: String where to write the frozen `GraphDef`.
-      clear_devices: A Bool whether to remove device specifications.
-      initializer_nodes: Comma separated string of initializer nodes to run before
-                         freezing.
-      variable_names_whitelist: The set of variable names to convert (optional, by
-                                default, all variables are converted).
-      variable_names_blacklist: The set of variable names to omit converting
-                                to constants (optional).
-      input_meta_graph_def: A `MetaGraphDef` (optional),
-      input_saved_model_dir: Path to the dir with TensorFlow 'SavedModel' file
-                             and variables (optional).
-      saved_model_tags: Group of comma separated tag(s) of the MetaGraphDef to
-                        load, in string format (optional).
-      checkpoint_version: Tensorflow variable file format (saver_pb2.SaverDef.V1
-                          or saver_pb2.SaverDef.V2)
-
-    Returns:
-      Location of the output_graph_def.
-    """
+    """Converts all variables in a graph and checkpoint into constants."""
     del restore_op_name, filename_tensor_name  # Unused by updated loading code.
 
     # 'input_checkpoint' may be a prefix if we're using Saver V2 format
     if (not input_saved_model_dir and
-            not checkpoint_management.checkpoint_exists(input_checkpoint)):
+            not saver_lib.checkpoint_exists(input_checkpoint)):
         print("Input checkpoint '" + input_checkpoint + "' doesn't exist!")
         return -1
 
@@ -175,48 +115,16 @@ def freeze_graph_with_def_protos(input_graph_def,
             var_list = {}
             reader = pywrap_tensorflow.NewCheckpointReader(input_checkpoint)
             var_to_shape_map = reader.get_variable_to_shape_map()
-
-            # List of all partition variables. Because the condition is heuristic
-            # based, the list could include false positives.
-            all_parition_variable_names = [
-                tensor.name.split(":")[0]
-                for op in sess.graph.get_operations()
-                for tensor in op.values()
-                if re.search(r"/part_\d+/", tensor.name)
-            ]
-            has_partition_var = False
-
             for key in var_to_shape_map:
                 try:
                     tensor = sess.graph.get_tensor_by_name(key + ":0")
-                    if any(key in name for name in all_parition_variable_names):
-                        has_partition_var = True
                 except KeyError:
                     # This tensor doesn't exist in the graph (for example it's
                     # 'global_step' or a similar housekeeping element) so skip it.
                     continue
                 var_list[key] = tensor
-
-            try:
-                saver = saver_lib.Saver(
-                    var_list=var_list, write_version=checkpoint_version)
-            except TypeError as e:
-                # `var_list` is required to be a map of variable names to Variable
-                # tensors. Partition variables are Identity tensors that cannot be
-                # handled by Saver.
-                if has_partition_var:
-                    print("Models containing partition variables cannot be converted "
-                          "from checkpoint files. Please pass in a SavedModel using "
-                          "the flag --input_saved_model_dir.")
-                    return -1
-                # Models that have been frozen previously do not contain Variables.
-                elif _has_no_variables(sess):
-                    print("No variables were found in this model. It is likely the model "
-                          "was frozen previously. You cannot freeze a graph twice.")
-                    return 0
-                else:
-                    raise e
-
+            saver = saver_lib.Saver(
+                var_list=var_list, write_version=checkpoint_version)
             saver.restore(sess, input_checkpoint)
             if initializer_nodes:
                 sess.run(initializer_nodes.replace(" ", "").split(","))
@@ -313,37 +221,7 @@ def freeze_graph(input_graph,
                  input_saved_model_dir=None,
                  saved_model_tags=tag_constants.SERVING,
                  checkpoint_version=saver_pb2.SaverDef.V2):
-    """Converts all variables in a graph and checkpoint into constants.
-
-    Args:
-      input_graph: A `GraphDef` file to load.
-      input_saver: A TensorFlow Saver file.
-      input_binary: A Bool. True means input_graph is .pb, False indicates .pbtxt.
-      input_checkpoint: The prefix of a V1 or V2 checkpoint, with V2 taking
-        priority.  Typically the result of `Saver.save()` or that of
-        `tf.train.latest_checkpoint()`, regardless of sharded/non-sharded or
-        V1/V2.
-      output_node_names: The name(s) of the output nodes, comma separated.
-      restore_op_name: Unused.
-      filename_tensor_name: Unused.
-      output_graph: String where to write the frozen `GraphDef`.
-      clear_devices: A Bool whether to remove device specifications.
-      initializer_nodes: Comma separated list of initializer nodes to run before
-                         freezing.
-      variable_names_whitelist: The set of variable names to convert (optional, by
-                                default, all variables are converted),
-      variable_names_blacklist: The set of variable names to omit converting
-                                to constants (optional).
-      input_meta_graph: A `MetaGraphDef` file to load (optional).
-      input_saved_model_dir: Path to the dir with TensorFlow 'SavedModel' file and
-                             variables (optional).
-      saved_model_tags: Group of comma separated tag(s) of the MetaGraphDef to
-                        load, in string format.
-      checkpoint_version: Tensorflow variable file format (saver_pb2.SaverDef.V1
-                          or saver_pb2.SaverDef.V2).
-    Returns:
-      String that is the location of frozen GraphDef.
-    """
+    """Converts all variables in a graph and checkpoint into constants."""
     input_graph_def = None
     if input_saved_model_dir:
         input_graph_def = saved_model_utils.get_meta_graph_def(

@@ -79,14 +79,14 @@ def pvanet(inputs: tf.Tensor, is_training: bool) -> Dict[str, tf.Tensor]:
     conv1_1 = initial_block(inputs)
     pool1_1 = tf.layers.max_pooling2d(conv1_1, (3, 3), (2, 2), padding="same")
 
-    conv2_1 = crelu_block(pool1_1, 24, 64, 3, 1, is_training)
-    conv2_2 = crelu_block(conv2_1, 24, 64, 3, 1, is_training)
-    conv2_3 = crelu_block(conv2_2, 24, 64, 3, 1, is_training)
+    conv2_1 = crelu_block(pool1_1, 24, 32, 3, 1, is_training)
+    conv2_2 = crelu_block(conv2_1, 24, 32, 3, 1, is_training)
+    conv2_3 = crelu_block(conv2_2, 24, 32, 3, 1, is_training)
 
-    conv3_1 = crelu_block(conv2_3, 48, 128, 3, 2, is_training)
-    conv3_2 = crelu_block(conv3_1, 48, 128, 3, 1, is_training)
-    conv3_3 = crelu_block(conv3_2, 48, 128, 3, 1, is_training)
-    conv3_4 = crelu_block(conv3_3, 48, 128, 3, 1, is_training)
+    conv3_1 = crelu_block(conv2_3, 48, 64, 3, 2, is_training)
+    conv3_2 = crelu_block(conv3_1, 48, 64, 3, 1, is_training)
+    conv3_3 = crelu_block(conv3_2, 48, 64, 3, 1, is_training)
+    conv3_4 = crelu_block(conv3_3, 48, 64, 3, 1, is_training)
 
     conv4_1 = inception_block(conv3_4, 64, [48, 128], [24, 48, 48], 128, 256, 2, is_training)
     conv4_2 = inception_block(conv4_1, 64, [64, 128], [24, 48, 48], None, 256, 1, is_training)

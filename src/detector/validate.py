@@ -3,7 +3,9 @@ import imutils
 import numpy as np
 import tqdm
 
-from detector import Detector
+from detector.detector_object_detection_api import Detector
+# from detector import Detector
+# from detector.detector_yolo import Detector
 
 
 def validate(model_folder: str, video_file: str, counter: int):
@@ -17,17 +19,14 @@ def validate(model_folder: str, video_file: str, counter: int):
             ret, frame = capture.read()
             if ret:
                 frame = imutils.resize(frame, height=768)
+                frame = frame.astype(np.uint8)
                 if i % counter == 0:
-                    frame = frame.astype(np.float32)
                     boxes = detector.predict_single_frame(frame)
-
-                    frame = frame.astype(np.uint8)
                     last_boxes = boxes
-                if last_boxes is not None:
-                    for box in last_boxes:
-                        cv2.polylines(frame, [box.astype(np.int32).reshape((-1, 1, 2))], True,
-                                      color=(255, 255, 0), thickness=5)
-
+                else:
+                    for x_min, y_min, x_max, y_max in last_boxes:
+                        cv2.rectangle(frame, (x_min, y_min), (x_max, y_max), color=(0, 255, 0),
+                                      thickness=1)
                 cv2.imshow('frame', frame)
                 if cv2.waitKey(1) & 0xFF == ord('q'):
                     break
