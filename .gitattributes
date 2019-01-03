@@ -1,2 +1,3 @@
 production/models/classifier.pb filter=lfs diff=lfs merge=lfs -text
 production/models/detector.pb filter=lfs diff=lfs merge=lfs -text
+production/models/*.pb filter=lfs diff=lfs merge=lfs -text
