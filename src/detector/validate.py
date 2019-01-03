@@ -22,6 +22,7 @@ def validate(model_folder: str, video_file: str, counter: int):
                 frame = frame.astype(np.uint8)
                 if i % counter == 0:
                     boxes = detector.predict_single_frame(frame)
+
                     last_boxes = boxes
                 else:
                     for x_min, y_min, x_max, y_max in last_boxes:
