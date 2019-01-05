@@ -266,7 +266,7 @@ def evaluate_detector(test_data_directory: str) -> Dict[float, Dict[str, Dict[st
     logger.info("Evaluating detector ...")
     results = {}
     test_directory = Path(test_data_directory) / "detection"
-    iou_thresholds = np.linspace(0.5, 0.95, 1)
+    iou_thresholds = np.linspace(0.5, 0.95, 10)
     for th in iou_thresholds:
         IOU_POSITIVE_THRESHOLD = th
         key = th.item()
