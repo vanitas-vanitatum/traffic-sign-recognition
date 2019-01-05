@@ -3,8 +3,8 @@ import tqdm
 import yaml
 
 from box_extractors import EXTRACTORS
-from detector import Detector
 from classifier import Classifier
+from detector import Detector
 from pipeline import Pipeline
 from steps import *
 
@@ -28,13 +28,16 @@ main_pipeline = Pipeline([
         "decoder",
         label_encoder=common.unpickle_data(config['paths']['label_encoder'])
     ),
+])
+
+visualisation_pipeline = main_pipeline + [
     VisualiseStep(
         "visualise"
     ),
     ShowVisualisation(
         "showtime"
     )
-])
+]
 
 
 def process_frame_by_frame(video_file: str):
@@ -44,9 +47,9 @@ def process_frame_by_frame(video_file: str):
         while True:
             ret, frame = capture.read()
             if ret:
-                frame = imutils.resize(frame, height=768)
+                frame = imutils.resize(frame, height=common.FRAME_HEIGHT)
                 frame = frame.astype(np.uint8)
-                main_pipeline.perform({
+                visualisation_pipeline.perform({
                     "input": frame
                 }, False)
                 if cv2.waitKey(1) & 0xFF == ord('q'):
@@ -68,9 +71,9 @@ def process_from_camera():
         while True:
             ret, frame = capture.read()
             if ret:
-                frame = imutils.resize(frame, height=768)
+                frame = imutils.resize(frame, height=common.FRAME_HEIGHT)
                 frame = frame.astype(np.uint8)
-                main_pipeline.perform({
+                visualisation_pipeline.perform({
                     "input": frame
                 }, False)
                 if cv2.waitKey(1) & 0xFF == ord('q'):
