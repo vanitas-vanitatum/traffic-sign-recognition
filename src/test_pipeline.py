@@ -260,7 +260,7 @@ def evaluate_detector_for_single_dataset(directory: Path) -> Dict[str, float]:
     }
 
 
-def evaluate_detector(test_data_directory: str) -> Dict[str, Dict[str, Dict[str, float]]]:
+def evaluate_detector(test_data_directory: str) -> Dict[float, Dict[str, Dict[str, float]]]:
     global IOU_POSITIVE_THRESHOLD
 
     logger.info("Evaluating detector ...")
