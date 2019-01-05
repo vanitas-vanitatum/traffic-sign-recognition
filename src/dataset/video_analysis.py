@@ -36,7 +36,7 @@ def kl_greyscale_divergence_histograms(frame_1: np.ndarray, frame_2: np.ndarray)
     return kl_divergence
 
 
-def analyse_video(video_path: str, output_path: str):
+def analyse_video(video_path: str, output_path: str, frame_spacing: int):
     cap = cv2.VideoCapture(video_path)
     previous_frame: np.ndarray = None
     data = {
@@ -48,11 +48,20 @@ def analyse_video(video_path: str, output_path: str):
     fps: float = cap.get(cv2.CAP_PROP_FPS)
     total_frames: int = cap.get(cv2.CAP_PROP_FRAME_COUNT)
     index: float = 0
+    skipped_frames: int = 0
     with tqdm.tqdm(total=total_frames) as pbar:
         while cap.isOpened():
             ret, frame = cap.read()
+            index += 1
+            pbar.update(1)
             if frame is None or np.prod(frame.shape) == 0:
                 break
+            if frame_spacing > 0:
+                if (skipped_frames + 1) % (frame_spacing + 1) != 0 and previous_frame is not None:
+                    skipped_frames += 1
+                    continue
+                else:
+                    skipped_frames = 0
             if previous_frame is not None:
                 timestamp = index / fps
                 data["luminosity difference"].append(luminosity_difference(frame, previous_frame))
@@ -60,12 +69,11 @@ def analyse_video(video_path: str, output_path: str):
                 data["timestamp"].append(timestamp)
                 data["kl divergence"].append(kl_greyscale_divergence_histograms(previous_frame, frame))
             previous_frame = frame
-            index += 1
-            pbar.update(1)
 
     frame = pd.DataFrame(data)
     output_path = os.path.join(output_path,
-                               "{}_temporal_statistics.csv".format(os.path.basename(video_path).split('.')[0]))
+                               "{}_temporal_statistics_{}_skip.csv".format(os.path.basename(video_path).split('.')[0],
+                                                                           frame_spacing))
     frame.to_csv(output_path, index=False)
 
 
@@ -75,7 +83,9 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Script for performing analysis of given video")
     parser.add_argument("--video_path", help="Path to video file")
     parser.add_argument("--output_path", help="Folder that will contain all files from analysis")
+    parser.add_argument("--spacing", help="Spacing in frames, the more the more different consecutive frames will be",
+                        type=int, default=0)
 
     args = parser.parse_args()
 
-    analyse_video(args.video_path, args.output_path)
+    analyse_video(args.video_path, args.output_path, args.spacing)
