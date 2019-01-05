@@ -3,6 +3,8 @@ import time
 from pathlib import Path
 from typing import *
 
+FRAME_HEIGHT = 768
+
 MODELS_PATH = Path("../models")
 SRC_PATH = Path(".")
 FONT_PATH = Path('FiraMono-Medium.otf')

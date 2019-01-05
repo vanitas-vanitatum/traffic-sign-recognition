@@ -44,3 +44,6 @@ class Pipeline:
         if key not in self._intermediate_results:
             raise AttributeError("Not found in aggregated data")
         return self._intermediate_results[key]
+
+    def __add__(self, other: List[Step]):
+        self._pipeline += other
