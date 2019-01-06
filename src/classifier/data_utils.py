@@ -7,12 +7,14 @@ from itertools import groupby
 from pathlib import Path
 from typing import *
 
+import numpy as np
 import tensorflow as tf
 import tqdm
 from PIL import Image
 from sklearn.preprocessing import LabelEncoder
 
 random.seed(0)
+np.random.seed(0)
 
 
 def int64_feature(value):
@@ -34,18 +36,21 @@ def extract_class_from_img_path(path: Path) -> str:
 def rebalance_by_path(paths: List[Path]) -> List[Path]:
     classes = [extract_class_from_img_path(path) for path in paths]
     counts = Counter(classes)
-    maximal_count = max([val for val in counts.values()])
+    maximal_count = int(max([val for val in counts.values()]) * FLAGS.fraction)
     groups = groupby(paths, key=lambda x: extract_class_from_img_path(x))
     new_paths = []
+    tf.logging.info("New count {} for {} classes".format(maximal_count, len(classes)))
     for key, group in groups:
+        group = list(group)
         cls_count = counts[key]
         remained_paths_to_fill = maximal_count - cls_count
         tf.logging.info(f"Class: {key}, instances: {cls_count}, to fill: {remained_paths_to_fill}")
-        new_paths += random.choices(list(group), k=remained_paths_to_fill)
+        if remained_paths_to_fill < 0:
+            new_paths += np.random.choice(group, size=maximal_count, replace=False).tolist()
+        else:
+            new_paths += random.choices(group, k=remained_paths_to_fill) + group
         tf.logging.info(f"Current added instances after rebalancing class {key}: {len(new_paths)}")
-    print(Counter([extract_class_from_img_path(path) for path in paths + new_paths]))
-    paths += new_paths
-    return paths
+    return new_paths
 
 
 def create_tfrecord(image_path: Path, encoder: LabelEncoder):
@@ -101,5 +106,7 @@ if __name__ == '__main__':
     tf.flags.DEFINE_bool("save_classes", False, "Whether save LabelEncoder object with class encoding")
     tf.flags.DEFINE_bool("rebalance_classes", False,
                          "Whether rebalance classes to maximal value existing in the dataset")
+    tf.flags.DEFINE_float("fraction", 0.7, "Fraction of maximum samples per class times a count of the most numerous"
+                                           "class")
     FLAGS = tf.flags.FLAGS
     tf.app.run()

@@ -1,5 +1,4 @@
 import cv2
-import imutils
 import numpy as np
 import tensorflow as tf
 
@@ -31,7 +30,7 @@ class Detector(Model):
         self._f_score = self._graph.get_tensor_by_name("import/feature_fusion/score:0")
         self._f_geometry = self._graph.get_tensor_by_name("import/feature_fusion/geometry:0")
 
-    def resize_image(self, im, max_side_len=2400):
+    def resize_image(self, im, max_side_len=512):
         """
         resize image to a size multiple of 32 which is required by the network
         :param im: the resized image
@@ -114,11 +113,8 @@ class Detector(Model):
 
     def predict_single_frame(self, x: np.ndarray) -> np.ndarray:
         original_h, original_w, _ = x.shape
-        partial = x[:original_h // 2, original_w // 2:]
-        partial_h, partial_w, _ = partial.shape
-        partial = imutils.resize(partial, width=original_w, height=original_h)
-        img = partial
-        im_resized, (ratio_h, ratio_w) = self.resize_image(img)
+        img = x
+        im_resized, (ratio_h, ratio_w) = self.resize_image(img, max_side_len=1280)
         score, geometry = self.sess.run(
             [self._f_score, self._f_geometry],
             feed_dict={self._inputs: [im_resized]})
@@ -130,15 +126,15 @@ class Detector(Model):
         boxes[:, :, 0] /= ratio_w
         boxes[:, :, 1] /= ratio_h
 
-        resize_ratio_h = im_resized.shape[0] / float(partial_h)
-        resize_ratio_w = im_resized.shape[1] / float(partial_w)
-
-        boxes[:, :, 0] /= resize_ratio_w
-        boxes[:, :, 0] += original_w // 2
-        boxes[:, :, 1] /= resize_ratio_h
-
         final_boxes = []
         for box, score in zip(boxes, scores):
             box = self.sort_poly(box.astype(np.int32))
             final_boxes.append(box)
-        return np.asarray(final_boxes)
+        final_boxes = np.asarray(final_boxes)
+        x_mins = np.min(final_boxes[:, :, 0], axis=1)
+        y_mins = np.min(final_boxes[:, :, 1], axis=1)
+        x_maxes = np.max(final_boxes[:, :, 0], axis=1)
+        y_maxes = np.max(final_boxes[:, :, 1], axis=1)
+
+        final_final_boxes = np.stack((x_mins, y_mins, x_maxes, y_maxes), axis=-1).astype(np.int32)
+        return final_final_boxes

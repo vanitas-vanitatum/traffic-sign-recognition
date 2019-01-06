@@ -1,5 +1,6 @@
 paths:
-  detector: ../production/models/detector_grayscale.pb
+  #  detector: ../production/models/detector_grayscale.pb
+  detector: ../production/models/detector_east_full_data.pb
   classifier: ../production/models/classifier.pb
   label_encoder: ../production/models/label_encoder.pkl
 

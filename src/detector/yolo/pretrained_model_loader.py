@@ -4,7 +4,7 @@ import tensorflow as tf
 def W(number_conv):
     # Charger weights from the pre-trained in COCO
     import h5py
-    with h5py.File('../models/yolov3.h5', 'r') as f:
+    with h5py.File('../production/models/yolo/yolov3.h5', 'r') as f:
         name = 'conv2d_' + str(number_conv)
         w = f['model_weights'][name][name]['kernel:0']
         weights = tf.cast(w, tf.float32)
@@ -14,7 +14,7 @@ def W(number_conv):
 def B(number_conv):
     # Charger biases, bat_norm from the pre-trained in COCO
     import h5py
-    with h5py.File('../models/yolov3.h5', 'r') as f:
+    with h5py.File('../production/models/yolo/yolov3.h5', 'r') as f:
         if (number_conv == 59) or (number_conv == 67) or (number_conv == 75):
             name = 'conv2d_' + str(number_conv)
             b = f['model_weights'][name][name]['bias:0']

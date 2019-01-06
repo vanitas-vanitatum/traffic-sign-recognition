@@ -1,8 +1,8 @@
 import argparse
+import os
 
 import tensorflow as tf
 
-import os
 from detector.model import model
 
 
@@ -15,8 +15,7 @@ def dump_model_to_correct_pbtxt(checkpoint_path: str, output_path: str):
                                       trainable=False)
 
         f_score, f_geometry = model(inputs, 512, is_training=True)
-        variable_averages = tf.train.ExponentialMovingAverage(0.997, global_step)
-        saver = tf.train.Saver(variable_averages.variables_to_restore())
+        saver = tf.train.Saver()
         with tf.Session() as sess:
             ckpt_state = tf.train.get_checkpoint_state(checkpoint_path)
             model_path = os.path.join(checkpoint_path, os.path.basename(ckpt_state.model_checkpoint_path))

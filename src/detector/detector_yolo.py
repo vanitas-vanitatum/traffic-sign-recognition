@@ -79,20 +79,14 @@ class Detector(Model):
             self._image_shape: image_shape
         })
 
-        out_boxes = []
-        for y_min, x_min, y_max, x_max in boxes:
-            out_box = [
-                [x_min, y_min],
-                [x_max, y_min],
-                [x_max, y_max],
-                [x_min, y_max]
-            ]
-            out_boxes.append(out_box)
-        if len(out_boxes) == 0:
-            return np.asarray(out_boxes, dtype=np.int32)
-        out_boxes = np.asarray(out_boxes, dtype=np.float32)
-        # out_boxes[..., 0] = (out_boxes[..., 0] - offset_left) / ratio_w
-        # out_boxes[..., 1] = (out_boxes[..., 1] - offset_top) / ratio_h
-        out_boxes = out_boxes.astype(np.int32)
+        boxes = [
+            [xmin, ymin, xmax, ymax]
+            for ymin, xmin, ymax, xmax in boxes
+            if (ymax - ymin) * (xmax - xmin) > 1
+        ]
+
+        if len(boxes) == 0:
+            return np.asarray(boxes, dtype=np.int32)
+        out_boxes = np.asarray(boxes, dtype=np.int32)
 
         return out_boxes

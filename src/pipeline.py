@@ -47,3 +47,4 @@ class Pipeline:
 
     def __add__(self, other: List[Step]):
         self._pipeline += other
+        return self

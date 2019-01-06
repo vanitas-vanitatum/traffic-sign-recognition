@@ -1,0 +1,1 @@
+grayscale detector, now with grayscale input data
