@@ -70,6 +70,7 @@ class ClassifierMetric(Enum):
     Recall = "recall"
     Precision = "precision"
     AUC = "auc"  # in terms of whether classify detection as a sign or not a sign
+    ConfusionMatrix = "confusion matrix"
     MeanProcessingTime = "mean processing time"
     StdProcessingTime = "std processing time"
 
@@ -283,6 +284,7 @@ def evaluate_classifier(test_data_directory: str) -> Dict[str, Dict[DetectorMetr
     logger.info("Evaluating classifier ...")
     results = {}
     test_directory = Path(test_data_directory) / "classification"
+
     return {}
 
 
