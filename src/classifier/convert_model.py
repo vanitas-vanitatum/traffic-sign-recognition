@@ -2,9 +2,8 @@ import argparse
 import os
 
 import tensorflow as tf
-import common
 
-from classifier.mobilenet2 import construct_model
+from classifier.architectures.mobilenet2 import construct_model
 
 
 def dump_model_to_correct_pbtxt(checkpoint_path: str, output_path: str, number_of_classes: int):
@@ -16,8 +15,7 @@ def dump_model_to_correct_pbtxt(checkpoint_path: str, output_path: str, number_o
         global_step = tf.get_variable('global_step', [], dtype=tf.int64, initializer=tf.constant_initializer(0),
                                       trainable=False)
         output = construct_model(inputs, False, number_of_classes)
-        variable_averages = tf.train.ExponentialMovingAverage(common.MOVING_AVERAGE_DECAY, global_step)
-        saver = tf.train.Saver(variable_averages.variables_to_restore())
+        saver = tf.train.Saver()
         with tf.Session() as sess:
             ckpt_state = tf.train.get_checkpoint_state(checkpoint_path)
             model_path = os.path.join(checkpoint_path, os.path.basename(ckpt_state.model_checkpoint_path))

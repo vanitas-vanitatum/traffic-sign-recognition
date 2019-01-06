@@ -33,10 +33,10 @@ def extract_class_from_img_path(path: Path) -> str:
     return path.parent.name
 
 
-def rebalance_by_path(paths: List[Path]) -> List[Path]:
+def rebalance_by_path(paths: List[Path], fraction_of_most_counted_class: float = 0.6) -> List[Path]:
     classes = [extract_class_from_img_path(path) for path in paths]
     counts = Counter(classes)
-    maximal_count = int(max([val for val in counts.values()]) * FLAGS.fraction)
+    maximal_count = int(max([val for val in counts.values()]) * fraction_of_most_counted_class)
     groups = groupby(paths, key=lambda x: extract_class_from_img_path(x))
     new_paths = []
     tf.logging.info("New count {} for {} classes".format(maximal_count, len(classes)))

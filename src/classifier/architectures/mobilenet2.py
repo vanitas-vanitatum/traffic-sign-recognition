@@ -1,3 +1,5 @@
+from typing import *
+
 import tensorflow as tf
 from tensorflow.keras.initializers import he_normal, glorot_uniform
 from tensorflow.keras.regularizers import l2
@@ -53,11 +55,13 @@ def bottleneck_residual_block(inputs: tf.Tensor, t_multiplier: int, output_chann
     return x + inputs
 
 
-def construct_model(inputs: tf.Tensor, is_training: bool, num_classes: int) -> tf.Tensor:
+def construct_model(inputs: tf.Tensor, is_training: bool, num_classes: int) -> Tuple[tf.Tensor, tf.Tensor]:
     strides = [1, 2, 2, 2, 1, 2, 1]
     channels = [16, 24, 32, 64, 96, 160, 320]
     repetitions = [1, 2, 3, 4, 3, 3, 1]
     multipliers = [1, 6, 6, 6, 6, 6, 6]
+
+    inputs /= 255
 
     x = convo_bn_relu(inputs, 32, 3, is_training, 2)
     for i in range(len(channels)):
@@ -68,6 +72,6 @@ def construct_model(inputs: tf.Tensor, is_training: bool, num_classes: int) -> t
 
     x = tf.layers.conv2d(x, 1280, 1, kernel_initializer=he_normal(), kernel_regularizer=l2(L2_REGULARIZATION))
     x = tf.reduce_mean(x, axis=[1, 2])
-    x = tf.layers.dense(x, num_classes, kernel_initializer=glorot_uniform(),
-                        kernel_regularizer=l2(L2_REGULARIZATION))
-    return x
+    sign_class = tf.layers.dense(x, num_classes, kernel_initializer=glorot_uniform(),
+                                 kernel_regularizer=l2(L2_REGULARIZATION), name="class")
+    return sign_class

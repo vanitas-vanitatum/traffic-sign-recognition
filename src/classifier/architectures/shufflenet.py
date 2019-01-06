@@ -93,6 +93,7 @@ def shuffle_block(inputs: tf.Tensor, features: int, is_training: bool, stride: i
 
 
 def construct_model(inputs: tf.Tensor, is_training: bool, num_classes: int) -> tf.Tensor:
+    inputs /= 255
     net = initial_block(inputs, 24, is_training)
 
     repetitions = [4, 8, 4]
