@@ -74,4 +74,5 @@ def construct_model(inputs: tf.Tensor, is_training: bool, num_classes: int) -> T
     x = tf.reduce_mean(x, axis=[1, 2])
     sign_class = tf.layers.dense(x, num_classes, kernel_initializer=glorot_uniform(),
                                  kernel_regularizer=l2(L2_REGULARIZATION), name="class")
+    sign_class = tf.add(sign_class, 0, name="output")
     return sign_class
