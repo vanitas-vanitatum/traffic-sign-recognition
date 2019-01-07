@@ -54,15 +54,17 @@ class ClassifyingBoxesStep(Step):
         input_data = data["boxes"]
         preprocessed_boxes = []
         classes = []
+        probas = []
         for box in input_data:
             box = cv2.resize(box, (self.input_width, self.input_height))
             box = cv2.cvtColor(cv2.cvtColor(box, cv2.COLOR_BGR2GRAY), cv2.COLOR_GRAY2BGR)
             preprocessed_boxes.append(box)
         if len(preprocessed_boxes) > 0:
             preprocessed_boxes = np.asarray(preprocessed_boxes, dtype=np.float32)
-            classes = self.model.predict(preprocessed_boxes)
+            classes, probas = self.model.predict(preprocessed_boxes)
         return {
-            "predicted_classes": classes
+            "predicted_classes": classes,
+            "predicted_probabilities": probas
         }
 
 

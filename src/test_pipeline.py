@@ -1,5 +1,6 @@
 import datetime
 import logging
+import pickle as pkl
 import random
 from enum import Enum
 from itertools import groupby
@@ -9,6 +10,7 @@ from typing import *
 import imgaug as ia
 import imgaug.augmenters as iaa
 import imutils
+import tqdm
 import yaml
 
 from main import main_pipeline
@@ -44,7 +46,7 @@ OUTPUT_TESTING_REPORT_DIRECTORY.mkdir(exist_ok=True)
 # it seperately as independent frame.mkdir(exist_ok=True)
 TIME_INTERPOLATION_FACTOR = 7
 
-DETECTION_AUGMENTATIONS = iaa.Sequential([
+AUGMENTATIONS = iaa.Sequential([
     iaa.Scale((1.0, 1.2)),
     iaa.Affine(translate_percent={"x": (-0.1, 0.1), "y": (-0.1, 0.1)}, mode="constant", cval=0)
 ], deterministic=True)
@@ -69,7 +71,7 @@ class ClassifierMetric(Enum):
     Accuracy = "accuracy"
     Recall = "recall"
     Precision = "precision"
-    AUC = "auc"  # in terms of whether classify detection as a sign or not a sign
+    AUC = "auc"
     ConfusionMatrix = "confusion matrix"
     MeanProcessingTime = "mean processing time"
     StdProcessingTime = "std processing time"
@@ -87,7 +89,7 @@ def augment_bounding_boxes(boxes: np.ndarray, image_shape: Tuple[int, ...]) -> n
     bbs = ia.BoundingBoxesOnImage([
         ia.BoundingBox(x1=x1, y1=y1, x2=x2, y2=y2)
         for x1, y1, x2, y2 in boxes], shape=image_shape)
-    bbs = DETECTION_AUGMENTATIONS.augment_bounding_boxes([bbs])[0]
+    bbs = AUGMENTATIONS.augment_bounding_boxes([bbs])[0]
     bbs = bbs.remove_out_of_image().cut_out_of_image()
     return bbs.to_xyxy_array()
 
@@ -140,7 +142,7 @@ def get_boxes_correct_guesses(boxes_1: np.ndarray, boxes_2: np.ndarray) -> float
 
 
 def augment_detection_samples(samples: List[Tuple[np.ndarray, np.ndarray]]) -> List[Tuple[np.ndarray, np.ndarray]]:
-    global DETECTION_AUGMENTATIONS
+    global AUGMENTATIONS
 
     to_augment = NUM_OF_AUGMENTED_SAMPLES - len(samples)
     new_samples = random.choices(samples, k=to_augment)
@@ -149,9 +151,9 @@ def augment_detection_samples(samples: List[Tuple[np.ndarray, np.ndarray]]) -> L
         is_ok = False
         try_index = 0
         new_image, new_boxes = image, boxes
-        DETECTION_AUGMENTATIONS = DETECTION_AUGMENTATIONS.to_deterministic()
+        AUGMENTATIONS = AUGMENTATIONS.to_deterministic()
         while not is_ok and try_index < MAX_AUGMENTATION_TRIES:
-            new_image = DETECTION_AUGMENTATIONS.augment_image(image)
+            new_image = AUGMENTATIONS.augment_image(image)
             new_boxes = augment_bounding_boxes(boxes, image.shape)
             is_ok = len(new_boxes) == len(boxes)
             try_index += 1
@@ -280,12 +282,103 @@ def evaluate_detector(test_data_directory: str) -> Dict[float, Dict[str, Dict[st
     return results
 
 
-def evaluate_classifier(test_data_directory: str) -> Dict[str, Dict[DetectorMetric, float]]:
+class ClassifierMetric(Enum):
+    Accuracy = "accuracy"
+    Recall = "recall"
+    Precision = "precision"
+    AUC = "auc"  # in terms of whether classify detection as a sign or not a sign
+    ConfusionMatrix = "confusion matrix"
+    MeanProcessingTime = "mean processing time"
+    StdProcessingTime = "std processing time"
+
+
+def evaluate_classifier_for_each_class(test_directory: Path,
+                                       label_encoder: LabelEncoder) -> Dict[ClassifierMetric, float]:
+    images_in_dir = list(test_directory.rglob("*.jpg"))
+
+    times = []
+    optimistic_predictions = []
+    standard = []
+    ground_truth = []
+
+    for image_path in tqdm.tqdm(images_in_dir):
+        an_img = cv2.imread(image_path)
+        an_img = cv2.cvtColor(cv2.cvtColor(an_img, cv2.COLOR_BGR2GRAY), cv2.COLOR_GRAY2BGR)
+        a_class = str(image_path.parent.name)
+
+        deterministic_augs = AUGMENTATIONS.to_deterministic()
+        new_img = an_img
+        for i in range(NUM_OF_AUGMENTED_SAMPLES):
+            new_img = deterministic_augs.augment_image(new_img)
+            main_pipeline.perform({
+                "input": an_img
+            }, True, steps_names_to_omit=["input", "detector", ])
+
+        best_iou = -1.0
+        best_boxes_gt, best_boxes_predicted = None, None
+
+        mean_guesses = []
+        mean_ious = []
+
+        for image, boxes in images_boxes:
+            main_pipeline.perform({
+                "input": image
+            }, True)
+
+            predicted_boxes = main_pipeline.get_intermediate_output("boxes_coordinates")
+            current_iou = get_iou(boxes, predicted_boxes, image.shape)
+            mean_ious.append(current_iou)
+            mean_guesses.append(get_boxes_correct_guesses(predicted_boxes, boxes))
+
+            if current_iou > best_iou:
+                best_iou = current_iou
+                best_boxes_gt = boxes
+                best_boxes_predicted = predicted_boxes
+            times.append(main_pipeline.timers["detector"])
+            total_predicted_boxes += (len(predicted_boxes) / len(images_boxes))
+            total_gt_boxes += (len(boxes) / len(images_boxes))
+
+        optimistic_total_predicted_boxes += len(best_boxes_predicted)
+        optimistic_total_gt_boxes += len(best_boxes_gt)
+
+        ious.append(np.mean(mean_ious))
+        guesses.append(np.mean(mean_guesses))
+
+        optimistic_ious.append(best_iou)
+        optimistic_guesses.append(get_boxes_correct_guesses(best_boxes_predicted, best_boxes_gt))
+    return {
+        DetectorMetric.MeanProcessingTime.value: np.mean(times).item(),
+        DetectorMetric.StdProcessingTime.value: np.std(times).item(),
+
+        DetectorMetric.IoU.value: np.mean(ious).item(),
+        DetectorMetric.Precision.value: (np.sum(guesses) / total_predicted_boxes).item(),
+        DetectorMetric.Recall.value: (np.sum(guesses) / total_gt_boxes).item(),
+
+        DetectorMetric.OptimisticIoU.value: np.mean(optimistic_ious).item(),
+        DetectorMetric.OptimisticPrecision.value: (
+                np.sum(optimistic_guesses) / optimistic_total_predicted_boxes).item(),
+        DetectorMetric.OptimisticRecall.value: (np.sum(optimistic_guesses) / optimistic_total_gt_boxes).item(),
+    }
+    pass
+
+
+def evaluate_classifier_for_class_vs_not_sign(test_directory: Path,
+                                              label_encoder: LabelEncoder) -> Dict[ClassifierMetric, float]:
+    pass
+
+
+def evaluate_classifier(test_data_directory: str) -> Dict[str, Dict[ClassifierMetric, float]]:
     logger.info("Evaluating classifier ...")
     results = {}
     test_directory = Path(test_data_directory) / "classification"
+    label_encoder_path = config["label_encoder"]
+    with open(label_encoder_path, 'rb') as f:
+        label_encoder = pkl.load(f)
 
-    return {}
+    results["normal classification"] = evaluate_classifier_for_each_class(test_directory, label_encoder)
+    results["sign vs not sign"] = evaluate_classifier_for_class_vs_not_sign(test_directory, label_encoder)
+
+    return results
 
 
 def get_time_stamp() -> str:

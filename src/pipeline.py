@@ -28,9 +28,11 @@ class Pipeline:
         self._start_time = 0
         self._end_time = 0
 
-    def perform(self, data: Dict, timeit: bool) -> Dict:
+    def perform(self, data: Dict, timeit: bool, steps_names_to_omit: List[str]) -> Dict:
         self._intermediate_results.update(data)
         for step in self._pipeline:
+            if step.name in steps_names_to_omit:
+                continue
             if timeit:
                 start_time = time.time()
             result = step.perform(self._intermediate_results)
