@@ -24,7 +24,7 @@ class Classifier(Model):
                 tf.import_graph_def(op_graph_def, name="")
         self.sess = tf.Session(graph=self._graph)
         self._inputs = self._graph.get_tensor_by_name("input_images:0")
-        self._output = self._graph.get_tensor_by_name("dense/BiasAdd:0")
+        self._output = self._graph.get_tensor_by_name("output:0")
 
     def predict(self, x: np.ndarray) -> np.ndarray:
         if len(x) == 0:
@@ -32,4 +32,3 @@ class Classifier(Model):
         outputs = self.sess.run(self._output, feed_dict={self._inputs: x})
         outputs = np.argmax(outputs, axis=1)
         return outputs
-

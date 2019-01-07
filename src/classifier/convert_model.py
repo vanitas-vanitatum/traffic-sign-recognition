@@ -11,7 +11,7 @@ def dump_model_to_correct_pbtxt(checkpoint_path: str, output_path: str, number_o
         raise ValueError("Given path already exists!: %s" % output_path)
     with tf.get_default_graph().as_default():
         inputs = tf.placeholder(tf.float32, shape=[None, None, None, 3], name='input_images')
-        output = construct_model(inputs, True, number_of_classes)
+        output = construct_model(inputs, False, number_of_classes)
         saver = tf.train.Saver()
         with tf.Session() as sess:
             ckpt_state = tf.train.get_checkpoint_state(checkpoint_path)

@@ -100,6 +100,7 @@ class DataLoader:
 
         class_name = os.path.basename(os.path.dirname(img_path))
         a_class = self.label_encoder.transform([class_name])[0]
+        img = cv2.cvtColor(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY), cv2.COLOR_GRAY2BGR)
         img = img.astype(np.float32)
         a_class = a_class.astype(np.int32)
         return img, a_class

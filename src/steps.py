@@ -56,11 +56,10 @@ class ClassifyingBoxesStep(Step):
         classes = []
         for box in input_data:
             box = cv2.resize(box, (self.input_width, self.input_height))
-            box = cv2.cvtColor(box, cv2.COLOR_BGR2GRAY)
-            box = np.expand_dims(box, axis=-1)
+            box = cv2.cvtColor(cv2.cvtColor(box, cv2.COLOR_BGR2GRAY), cv2.COLOR_GRAY2BGR)
             preprocessed_boxes.append(box)
         if len(preprocessed_boxes) > 0:
-            preprocessed_boxes = np.asarray(preprocessed_boxes, np.float32) / 255
+            preprocessed_boxes = np.asarray(preprocessed_boxes, dtype=np.float32)
             classes = self.model.predict(preprocessed_boxes)
         return {
             "predicted_classes": classes
@@ -108,9 +107,10 @@ class VisualiseStep(Step):
                     text_origin = np.array([left, top + 1])
 
                     # My kingdom for a good redistributable image drawing library.
+                color = (0, 255, 0) if cls != common.NO_SIGN_CLASS else (2, 106, 253)
                 for j in range(thickness):
-                    draw.rectangle([left + j, top + j, right - j, bottom - j], outline=(0, 255, 0))
-                draw.rectangle([tuple(text_origin), tuple(text_origin + label_size)], fill=(0, 255, 0))
+                    draw.rectangle([left + j, top + j, right - j, bottom - j], outline=color)
+                draw.rectangle([tuple(text_origin), tuple(text_origin + label_size)], fill=color)
                 draw.text(text_origin, cls, fill=(0, 0, 0), font=font)
 
         return {
