@@ -1,4 +1,5 @@
 import datetime
+import itertools
 import logging
 import pickle as pkl
 import random
@@ -10,8 +11,10 @@ from typing import *
 import imgaug as ia
 import imgaug.augmenters as iaa
 import imutils
+import matplotlib.pyplot as plt
 import tqdm
 import yaml
+from sklearn import metrics
 
 from main import main_pipeline
 from steps import *
@@ -46,9 +49,13 @@ OUTPUT_TESTING_REPORT_DIRECTORY.mkdir(exist_ok=True)
 # it seperately as independent frame.mkdir(exist_ok=True)
 TIME_INTERPOLATION_FACTOR = 7
 
-AUGMENTATIONS = iaa.Sequential([
+DETECTION_AUGMENTATION = iaa.Sequential([
     iaa.Scale((1.0, 1.2)),
     iaa.Affine(translate_percent={"x": (-0.1, 0.1), "y": (-0.1, 0.1)}, mode="constant", cval=0)
+], deterministic=True)
+
+CLASSIFICATION_AUGMENTATION = iaa.Sequential([
+    iaa.Affine(translate_percent={"x": (-0.05, 0.05), "y": (-0.05, 0.05)}, mode="constant", cval=0)
 ], deterministic=True)
 
 MAX_AUGMENTATION_TRIES = 50
@@ -68,6 +75,11 @@ class DetectorMetric(Enum):
 
 
 class ClassifierMetric(Enum):
+    OptimisticAccuracy = "optimistic accuracy"
+    OptimisticRecall = "optimistic recall"
+    OptimisticPrecision = "optimistic precision"
+    OptimisticAUC = "optimistic auc"
+    OptimisticConfusionMatrix = "optimistic confusion matrix"
     Accuracy = "accuracy"
     Recall = "recall"
     Precision = "precision"
@@ -89,7 +101,7 @@ def augment_bounding_boxes(boxes: np.ndarray, image_shape: Tuple[int, ...]) -> n
     bbs = ia.BoundingBoxesOnImage([
         ia.BoundingBox(x1=x1, y1=y1, x2=x2, y2=y2)
         for x1, y1, x2, y2 in boxes], shape=image_shape)
-    bbs = AUGMENTATIONS.augment_bounding_boxes([bbs])[0]
+    bbs = DETECTION_AUGMENTATION.augment_bounding_boxes([bbs])[0]
     bbs = bbs.remove_out_of_image().cut_out_of_image()
     return bbs.to_xyxy_array()
 
@@ -142,7 +154,7 @@ def get_boxes_correct_guesses(boxes_1: np.ndarray, boxes_2: np.ndarray) -> float
 
 
 def augment_detection_samples(samples: List[Tuple[np.ndarray, np.ndarray]]) -> List[Tuple[np.ndarray, np.ndarray]]:
-    global AUGMENTATIONS
+    global DETECTION_AUGMENTATION
 
     to_augment = NUM_OF_AUGMENTED_SAMPLES - len(samples)
     new_samples = random.choices(samples, k=to_augment)
@@ -151,9 +163,9 @@ def augment_detection_samples(samples: List[Tuple[np.ndarray, np.ndarray]]) -> L
         is_ok = False
         try_index = 0
         new_image, new_boxes = image, boxes
-        AUGMENTATIONS = AUGMENTATIONS.to_deterministic()
+        DETECTION_AUGMENTATION = DETECTION_AUGMENTATION.to_deterministic()
         while not is_ok and try_index < MAX_AUGMENTATION_TRIES:
-            new_image = AUGMENTATIONS.augment_image(image)
+            new_image = DETECTION_AUGMENTATION.augment_image(image)
             new_boxes = augment_bounding_boxes(boxes, image.shape)
             is_ok = len(new_boxes) == len(boxes)
             try_index += 1
@@ -282,107 +294,246 @@ def evaluate_detector(test_data_directory: str) -> Dict[float, Dict[str, Dict[st
     return results
 
 
-class ClassifierMetric(Enum):
-    Accuracy = "accuracy"
-    Recall = "recall"
-    Precision = "precision"
-    AUC = "auc"  # in terms of whether classify detection as a sign or not a sign
-    ConfusionMatrix = "confusion matrix"
-    MeanProcessingTime = "mean processing time"
-    StdProcessingTime = "std processing time"
-
-
 def evaluate_classifier_for_each_class(test_directory: Path,
-                                       label_encoder: LabelEncoder) -> Dict[ClassifierMetric, float]:
+                                       label_encoder: LabelEncoder) -> Dict[str, float]:
     images_in_dir = list(test_directory.rglob("*.jpg"))
+    random.shuffle(images_in_dir)
+    images_in_dir = images_in_dir[:1000]
 
     times = []
     optimistic_predictions = []
-    standard = []
+    standard_predictions = []
     ground_truth = []
 
     for image_path in tqdm.tqdm(images_in_dir):
-        an_img = cv2.imread(image_path)
+        an_img = cv2.imread(image_path.as_posix())
         an_img = cv2.cvtColor(cv2.cvtColor(an_img, cv2.COLOR_BGR2GRAY), cv2.COLOR_GRAY2BGR)
         a_class = str(image_path.parent.name)
 
-        deterministic_augs = AUGMENTATIONS.to_deterministic()
+        deterministic_augs = CLASSIFICATION_AUGMENTATION.to_deterministic()
         new_img = an_img
+        probabilities = np.zeros((NUM_OF_AUGMENTED_SAMPLES, len(label_encoder.classes_)))
         for i in range(NUM_OF_AUGMENTED_SAMPLES):
             new_img = deterministic_augs.augment_image(new_img)
             main_pipeline.perform({
-                "input": an_img
-            }, True, steps_names_to_omit=["input", "detector", ])
+                "boxes": [new_img]
+            }, True, steps_names_to_omit=["input", "detector", "decoder", "visualise", "showtime"])
+            probabilities[i] = main_pipeline.get_intermediate_output("predicted_probabilities")[0]
+            times.append(main_pipeline.timers["classifier"])
+        optimistic_probas = np.mean(probabilities, axis=0)
+        optimistic_probas /= optimistic_probas.sum(keepdims=True)
+        optimistic_class = np.argmax(optimistic_probas)
 
-        best_iou = -1.0
-        best_boxes_gt, best_boxes_predicted = None, None
+        main_pipeline.perform({
+            "boxes": [an_img]
+        }, True, steps_names_to_omit=["input", "detector", "decoder", "visualise", "showtime"])
 
-        mean_guesses = []
-        mean_ious = []
+        predicted_class = main_pipeline.get_intermediate_output("predicted_classes")[0]
+        times.append(main_pipeline.timers["classifier"])
 
-        for image, boxes in images_boxes:
-            main_pipeline.perform({
-                "input": image
-            }, True)
+        ground_truth.append(label_encoder.transform([a_class])[0])
+        standard_predictions.append(predicted_class)
+        optimistic_predictions.append(optimistic_class)
 
-            predicted_boxes = main_pipeline.get_intermediate_output("boxes_coordinates")
-            current_iou = get_iou(boxes, predicted_boxes, image.shape)
-            mean_ious.append(current_iou)
-            mean_guesses.append(get_boxes_correct_guesses(predicted_boxes, boxes))
+    optimistic_recall = metrics.recall_score(ground_truth, optimistic_predictions, average="weighted")
+    pessimistic_recall = metrics.recall_score(ground_truth, standard_predictions, average="weighted")
 
-            if current_iou > best_iou:
-                best_iou = current_iou
-                best_boxes_gt = boxes
-                best_boxes_predicted = predicted_boxes
-            times.append(main_pipeline.timers["detector"])
-            total_predicted_boxes += (len(predicted_boxes) / len(images_boxes))
-            total_gt_boxes += (len(boxes) / len(images_boxes))
+    optimistic_precision = metrics.precision_score(ground_truth, optimistic_predictions, average="weighted")
+    pessimistic_precision = metrics.precision_score(ground_truth, standard_predictions, average="weighted")
 
-        optimistic_total_predicted_boxes += len(best_boxes_predicted)
-        optimistic_total_gt_boxes += len(best_boxes_gt)
+    optimistic_accuracy = metrics.accuracy_score(ground_truth, optimistic_predictions)
+    pessimistic_accuracy = metrics.accuracy_score(ground_truth, standard_predictions)
 
-        ious.append(np.mean(mean_ious))
-        guesses.append(np.mean(mean_guesses))
+    optimistic_cf = metrics.confusion_matrix(ground_truth, optimistic_predictions)
+    pessimistic_cf = metrics.confusion_matrix(ground_truth, standard_predictions)
 
-        optimistic_ious.append(best_iou)
-        optimistic_guesses.append(get_boxes_correct_guesses(best_boxes_predicted, best_boxes_gt))
     return {
-        DetectorMetric.MeanProcessingTime.value: np.mean(times).item(),
-        DetectorMetric.StdProcessingTime.value: np.std(times).item(),
+        ClassifierMetric.MeanProcessingTime.value: np.mean(times).item(),
+        ClassifierMetric.StdProcessingTime.value: np.std(times).item(),
 
-        DetectorMetric.IoU.value: np.mean(ious).item(),
-        DetectorMetric.Precision.value: (np.sum(guesses) / total_predicted_boxes).item(),
-        DetectorMetric.Recall.value: (np.sum(guesses) / total_gt_boxes).item(),
+        ClassifierMetric.Recall.value: float(pessimistic_recall),
+        ClassifierMetric.Precision.value: float(pessimistic_precision),
+        ClassifierMetric.Accuracy.value: float(pessimistic_accuracy),
+        ClassifierMetric.ConfusionMatrix.value: pessimistic_cf,
 
-        DetectorMetric.OptimisticIoU.value: np.mean(optimistic_ious).item(),
-        DetectorMetric.OptimisticPrecision.value: (
-                np.sum(optimistic_guesses) / optimistic_total_predicted_boxes).item(),
-        DetectorMetric.OptimisticRecall.value: (np.sum(optimistic_guesses) / optimistic_total_gt_boxes).item(),
+        ClassifierMetric.OptimisticRecall.value: float(optimistic_recall),
+        ClassifierMetric.OptimisticPrecision.value: float(optimistic_precision),
+        ClassifierMetric.OptimisticAccuracy.value: float(optimistic_accuracy),
+        ClassifierMetric.OptimisticConfusionMatrix.value: optimistic_cf,
     }
-    pass
 
 
 def evaluate_classifier_for_class_vs_not_sign(test_directory: Path,
-                                              label_encoder: LabelEncoder) -> Dict[ClassifierMetric, float]:
-    pass
+                                              label_encoder: LabelEncoder) -> Dict[str, float]:
+    images_in_dir = list(test_directory.rglob("*.jpg"))
+    random.shuffle(images_in_dir)
+    images_in_dir = images_in_dir[:1000]
+
+    times = []
+    optimistic_predictions = []
+    standard_predictions = []
+    ground_truth = []
+
+    class_num_for_not_a_sign = label_encoder.transform([common.NO_SIGN_CLASS])[0]
+
+    for image_path in tqdm.tqdm(images_in_dir):
+        an_img = cv2.imread(image_path.as_posix())
+        an_img = cv2.cvtColor(cv2.cvtColor(an_img, cv2.COLOR_BGR2GRAY), cv2.COLOR_GRAY2BGR)
+        a_class = str(image_path.parent.name)
+
+        deterministic_augs = CLASSIFICATION_AUGMENTATION.to_deterministic()
+        new_img = an_img
+        probabilities = np.zeros((NUM_OF_AUGMENTED_SAMPLES, len(label_encoder.classes_)))
+        for i in range(NUM_OF_AUGMENTED_SAMPLES):
+            new_img = deterministic_augs.augment_image(new_img)
+            main_pipeline.perform({
+                "boxes": [new_img]
+            }, True, steps_names_to_omit=["input", "detector", "decoder", "visualise", "showtime"])
+            probabilities[i] = main_pipeline.get_intermediate_output("predicted_probabilities")[0]
+            times.append(main_pipeline.timers["classifier"])
+        optimistic_probas = np.mean(probabilities, axis=0)
+        optimistic_class = np.argmax(optimistic_probas)
+
+        main_pipeline.perform({
+            "boxes": [an_img]
+        }, True, steps_names_to_omit=["input", "detector", "decoder", "visualise", "showtime"])
+
+        predicted_class = main_pipeline.get_intermediate_output("predicted_classes")[0]
+        times.append(main_pipeline.timers["classifier"])
+
+        ground_truth.append(int(class_num_for_not_a_sign == label_encoder.transform([a_class])[0]))
+        standard_predictions.append(int(class_num_for_not_a_sign == predicted_class))
+        optimistic_predictions.append(int(class_num_for_not_a_sign == optimistic_class))
+
+    optimistic_recall = metrics.recall_score(ground_truth, optimistic_predictions, average="weighted")
+    pessimistic_recall = metrics.recall_score(ground_truth, standard_predictions, average="weighted")
+
+    optimistic_precision = metrics.precision_score(ground_truth, optimistic_predictions, average="weighted")
+    pessimistic_precision = metrics.precision_score(ground_truth, standard_predictions, average="weighted")
+
+    optimistic_accuracy = metrics.accuracy_score(ground_truth, optimistic_predictions)
+    pessimistic_accuracy = metrics.accuracy_score(ground_truth, standard_predictions)
+
+    optimistic_auc = metrics.roc_auc_score(ground_truth, optimistic_predictions, average="weighted")
+    pessimistic_auc = metrics.roc_auc_score(ground_truth, standard_predictions, average="weighted")
+
+    optimistic_cf = metrics.confusion_matrix(ground_truth, optimistic_predictions)
+    pessimistic_cf = metrics.confusion_matrix(ground_truth, standard_predictions)
+
+    return {
+        ClassifierMetric.MeanProcessingTime.value: np.mean(times).item(),
+        ClassifierMetric.StdProcessingTime.value: np.std(times).item(),
+
+        ClassifierMetric.Recall.value: float(pessimistic_recall),
+        ClassifierMetric.Precision.value: float(pessimistic_precision),
+        ClassifierMetric.Accuracy.value: float(pessimistic_accuracy),
+        ClassifierMetric.AUC.value: float(pessimistic_auc),
+        ClassifierMetric.ConfusionMatrix.value: pessimistic_cf,
+
+        ClassifierMetric.OptimisticRecall.value: float(optimistic_recall),
+        ClassifierMetric.OptimisticPrecision.value: float(optimistic_precision),
+        ClassifierMetric.OptimisticAccuracy.value: float(optimistic_accuracy),
+        ClassifierMetric.OptimisticAUC.value: float(optimistic_auc),
+        ClassifierMetric.OptimisticConfusionMatrix.value: optimistic_cf,
+    }
 
 
-def evaluate_classifier(test_data_directory: str) -> Dict[str, Dict[ClassifierMetric, float]]:
+def plot_confusion_matrix(cm, classes, output_path: Path,
+                          title='Confusion matrix',
+                          cmap=plt.cm.Blues):
+    """
+    This function prints and plots the confusion matrix.
+    Normalization can be applied by setting `normalize=True`.
+    """
+    output_path = output_path.as_posix()
+    plt.figure(figsize=(16, 14))
+    cm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
+    print("Normalized confusion matrix")
+    plt.imshow(cm, interpolation='nearest', cmap=cmap)
+    plt.title(title)
+    plt.colorbar()
+    tick_marks = np.arange(len(classes))
+    plt.xticks(tick_marks, classes, rotation=90)
+    plt.yticks(tick_marks, classes)
+
+    fmt = '.2f'
+    thresh = cm.max() / 2.
+    for i, j in itertools.product(range(cm.shape[0]), range(cm.shape[1])):
+        plt.text(j, i, format(cm[i, j], fmt),
+                 horizontalalignment="center",
+                 color="white" if cm[i, j] > thresh else "black")
+
+    plt.ylabel('True label')
+    plt.xlabel('Predicted label')
+    plt.tight_layout()
+    plt.savefig(output_path)
+    plt.close()
+
+
+def evaluate_classifier(test_data_directory: str) -> Dict[str, Dict[str, float]]:
     logger.info("Evaluating classifier ...")
     results = {}
     test_directory = Path(test_data_directory) / "classification"
-    label_encoder_path = config["label_encoder"]
+    label_encoder_path = config["paths"]["label_encoder"]
     with open(label_encoder_path, 'rb') as f:
         label_encoder = pkl.load(f)
 
-    results["normal classification"] = evaluate_classifier_for_each_class(test_directory, label_encoder)
-    results["sign vs not sign"] = evaluate_classifier_for_class_vs_not_sign(test_directory, label_encoder)
+    normal_classification = evaluate_classifier_for_each_class(test_directory, label_encoder)
+    sign_vs_not_sign = evaluate_classifier_for_class_vs_not_sign(test_directory, label_encoder)
+
+    results["normal classification"] = normal_classification
+    results["sign vs not sign"] = sign_vs_not_sign
 
     return results
 
 
 def get_time_stamp() -> str:
     return datetime.datetime.now().strftime("%d_%m_%Y_%H_%M")
+
+
+def finish_detector(test_data_dir: str, output_detector_experiment_path: Path, note: str):
+    evaluation_detector = evaluate_detector(test_data_dir)
+    output_detector_experiment_path.mkdir(parents=True)
+    with open((output_detector_experiment_path / "note.txt").as_posix(), 'w') as f:
+        f.write(note)
+
+    with open((output_detector_experiment_path / "results.yaml").as_posix(), 'w') as f:
+        yaml.dump(evaluation_detector, f, indent=4, default_flow_style=False)
+
+
+def finish_classifier(test_data_dir: str, output_classifier_experiment_path: Path, note: str):
+    evaluation_classifier = evaluate_classifier(test_data_dir)
+    output_classifier_experiment_path.mkdir(parents=True)
+    with open((output_classifier_experiment_path / "note.txt").as_posix(), 'w') as f:
+        f.write(note)
+
+    label_encoder_path = config["paths"]["label_encoder"]
+    with open(label_encoder_path, 'rb') as f:
+        label_encoder = pkl.load(f)
+
+    normal_classification = evaluation_classifier["normal classification"]
+    sign_vs_not_sign = evaluation_classifier["sign vs not sign"]
+    plot_confusion_matrix(normal_classification[ClassifierMetric.ConfusionMatrix.value],
+                          classes=label_encoder.classes_, title="Standard confusion matrix",
+                          output_path=output_classifier_experiment_path / "cls_vs_cls_standard.pdf")
+    plot_confusion_matrix(normal_classification[ClassifierMetric.OptimisticConfusionMatrix.value],
+                          classes=label_encoder.classes_, title="Optimistic confusion matrix",
+                          output_path=output_classifier_experiment_path / "cls_vs_cls_optimistic.pdf")
+    plot_confusion_matrix(sign_vs_not_sign[ClassifierMetric.ConfusionMatrix.value],
+                          classes=["sign", "not sign"], title="Standard confusion matrix",
+                          output_path=output_classifier_experiment_path / "sign_vs_not_sign_standard.pdf")
+    plot_confusion_matrix(sign_vs_not_sign[ClassifierMetric.OptimisticConfusionMatrix.value],
+                          classes=["sign", "not sign"], title="Optimistic confusion matrix",
+                          output_path=output_classifier_experiment_path / "sign_vs_not_sign_optimistic.pdf")
+
+    normal_classification.pop(ClassifierMetric.ConfusionMatrix.value)
+    normal_classification.pop(ClassifierMetric.OptimisticConfusionMatrix.value)
+
+    sign_vs_not_sign.pop(ClassifierMetric.ConfusionMatrix.value)
+    sign_vs_not_sign.pop(ClassifierMetric.OptimisticConfusionMatrix.value)
+
+    with open((output_classifier_experiment_path / "results.yaml").as_posix(), 'w') as f:
+        yaml.dump(evaluation_classifier, f, indent=4, default_flow_style=False)
 
 
 def evaluate(test_data_dir: str, test_detector_only: bool, test_classifier_only: bool):
@@ -392,39 +543,12 @@ def evaluate(test_data_dir: str, test_detector_only: bool, test_classifier_only:
     output_classifier_experiment_path = OUTPUT_TESTING_REPORT_DIRECTORY / "classifier" / timestamp
 
     if test_detector_only:
-        evaluation_detector = evaluate_detector(test_data_dir)
-        output_detector_experiment_path.mkdir(parents=True)
-        with open(output_detector_experiment_path / "note.txt", 'w') as f:
-            f.write(note)
-
-        with open(output_detector_experiment_path / "results.yaml", 'w') as f:
-            yaml.dump(evaluation_detector, f, indent=4, default_flow_style=False)
+        finish_detector(test_data_dir, output_detector_experiment_path, note)
     elif test_classifier_only:
-        evaluation_classifier = evaluate_classifier(test_data_dir)
-        output_classifier_experiment_path.mkdir(parents=True)
-        with open(output_classifier_experiment_path / "note.txt", 'w') as f:
-            f.write(note)
-
-        with open(output_classifier_experiment_path / "results.yaml", 'w') as f:
-            yaml.dump(evaluation_classifier, f, indent=4, default_flow_style=False)
+        finish_classifier(test_data_dir, output_classifier_experiment_path, note)
     else:
-        evaluation_detector = evaluate_detector(test_data_dir)
-        evaluation_classifier = evaluate_classifier(test_data_dir)
-
-        output_detector_experiment_path.mkdir(parents=True)
-        output_classifier_experiment_path.mkdir(parents=True)
-
-        with open(output_detector_experiment_path / "note.txt", 'w') as f:
-            f.write(note)
-
-        with open(output_detector_experiment_path / "results.yaml", 'w') as f:
-            yaml.dump(evaluation_detector, f, indent=4, default_flow_style=False)
-
-        with open(output_classifier_experiment_path / "note.txt", 'w') as f:
-            f.write(note)
-
-        with open(output_classifier_experiment_path / "results.yaml", 'w') as f:
-            yaml.dump(evaluation_classifier, f, indent=4, default_flow_style=False)
+        finish_detector(test_data_dir, output_detector_experiment_path, note)
+        finish_classifier(test_data_dir, output_classifier_experiment_path, note)
 
 
 if __name__ == '__main__':
