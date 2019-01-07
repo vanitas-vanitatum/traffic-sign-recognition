@@ -298,7 +298,7 @@ def evaluate_classifier_for_each_class(test_directory: Path,
                                        label_encoder: LabelEncoder) -> Dict[str, float]:
     images_in_dir = list(test_directory.rglob("*.jpg"))
     random.shuffle(images_in_dir)
-    images_in_dir = images_in_dir[:1000]
+    images_in_dir = images_in_dir
 
     times = []
     optimistic_predictions = []
@@ -367,7 +367,7 @@ def evaluate_classifier_for_class_vs_not_sign(test_directory: Path,
                                               label_encoder: LabelEncoder) -> Dict[str, float]:
     images_in_dir = list(test_directory.rglob("*.jpg"))
     random.shuffle(images_in_dir)
-    images_in_dir = images_in_dir[:1000]
+    images_in_dir = images_in_dir
 
     times = []
     optimistic_predictions = []
