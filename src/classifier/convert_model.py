@@ -3,7 +3,11 @@ import os
 
 import tensorflow as tf
 
-from classifier.architectures.mobilenet2 import construct_model
+# from classifier.architectures.wrn import construct_model
+from classifier.architectures.shufflenet import construct_model
+
+
+# from classifier.architectures.mobilenet2 import construct_model
 
 
 def dump_model_to_correct_pbtxt(checkpoint_path: str, output_path: str, number_of_classes: int):

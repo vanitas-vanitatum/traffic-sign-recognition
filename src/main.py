@@ -1,3 +1,5 @@
+from typing import *
+
 import imutils
 import tqdm
 import yaml
@@ -40,8 +42,31 @@ visualisation_pipeline = main_pipeline + [
 ]
 
 
-def process_frame_by_frame(video_file: str):
+class Recorder:
+    def __init__(self, output_file: Optional[str]):
+        self.output_path = output_file
+        self.capture = cv2.VideoWriter_fourcc(*"XVID")
+        self.init = False
+        self.video_writer: cv2.VideoWriter = None
+
+    def record_frame(self, frame: np.ndarray):
+        if self.output_path is None:
+            return
+        h, w = frame.shape[:2]
+        if not self.init:
+            self.video_writer = cv2.VideoWriter(self.output_path, self.capture, 24, (w, h))
+            self.init = True
+
+        self.video_writer.write(frame)
+
+    def __del__(self):
+        if self.video_writer:
+            self.video_writer.release()
+
+
+def process_frame_by_frame(video_file: str, output_path: Optional[str]):
     capture = cv2.VideoCapture(video_file)
+    recorder = Recorder(output_path)
     i = 0
     with tqdm.tqdm() as pbar:
         while True:
@@ -52,6 +77,7 @@ def process_frame_by_frame(video_file: str):
                 visualisation_pipeline.perform({
                     "input": frame
                 }, False)
+                recorder.record_frame(visualisation_pipeline.get_intermediate_output("visualised"))
                 if cv2.waitKey(1) & 0xFF == ord('q'):
                     break
                 i += 1
@@ -64,9 +90,10 @@ def process_frame_by_frame(video_file: str):
     cv2.destroyAllWindows()
 
 
-def process_from_camera():
+def process_from_camera(output_path: Optional[str]):
     capture = cv2.VideoCapture(0)
     i = 0
+    recorder = Recorder(output_path)
     with tqdm.tqdm() as pbar:
         while True:
             ret, frame = capture.read()
@@ -76,6 +103,7 @@ def process_from_camera():
                 visualisation_pipeline.perform({
                     "input": frame
                 }, False)
+                recorder.record_frame(visualisation_pipeline.get_intermediate_output("visualised"))
                 if cv2.waitKey(1) & 0xFF == ord('q'):
                     break
                 i += 1
@@ -93,9 +121,10 @@ if __name__ == '__main__':
 
     argument_parser = argparse.ArgumentParser(description="Script for validating program")
     argument_parser.add_argument("--video", help="Path to video file")
+    argument_parser.add_argument("--output_path", required=False, help="Path to output processed file")
     args = argument_parser.parse_args()
 
     if args.video is not None:
-        process_frame_by_frame(args.video)
+        process_frame_by_frame(args.video, args.output_path)
     else:
-        process_from_camera()
+        process_from_camera(args.output_path)

@@ -1,20 +1,21 @@
 normal classification:
-    accuracy: 0.9266641114092244
-    mean processing time: 0.024541506094693133
-    optimistic accuracy: 0.8515395426089178
-    optimistic precision: 0.8777667350100183
-    optimistic recall: 0.8515395426089178
-    precision: 0.9465441174322606
-    recall: 0.9266641114092244
-    std processing time: 0.01316696745901882
+    accuracy: 0.9293471317235211
+    mean processing time: 0.01864624445830622
+    optimistic accuracy: 0.8532004599463396
+    optimistic precision: 0.879366761434668
+    optimistic recall: 0.8532004599463396
+    precision: 0.948099161999095
+    recall: 0.9293471317235211
+    std processing time: 0.013705177802777831
+
 sign vs not sign:
     accuracy: 0.9490226140283634
     auc: 0.7400416631765124
-    mean processing time: 0.020031676697145152
-    optimistic accuracy: 0.9543886546569567
-    optimistic auc: 0.8264781143233709
-    optimistic precision: 0.9518263274978729
-    optimistic recall: 0.9543886546569567
+    mean processing time: 0.018868460204795122
+    optimistic accuracy: 0.9547719432732847
+    optimistic auc: 0.8301924415488724
+    optimistic precision: 0.952304632675368
+    optimistic recall: 0.9547719432732847
     precision: 0.951435478878133
     recall: 0.9490226140283634
-    std processing time: 0.005124773259850689
+    std processing time: 0.013449360772115244

@@ -1,3 +1,4 @@
+import collections
 import os
 import pickle as pkl
 from itertools import chain
@@ -18,6 +19,84 @@ from common import CLASSIFIER_INPUT_HEIGHT, CLASSIFIER_INPUT_WIDTH
 np.random.seed(0)
 
 
+class Merger:
+    def __init__(self, input_class: str, output_class: str):
+        self._input_class = input_class
+        self._output_class = output_class
+
+    def _merge_if_list(self, instance: Iterable, label_encoder: Optional[LabelEncoder]) -> Iterable:
+        new_classes = []
+        for cls in instance:
+            if isinstance(cls, int):
+                transformed = label_encoder.inverse_transform([instance])[0]
+                if transformed == self._input_class:
+                    if self._output_class in new_classes:
+                        continue
+                    else:
+                        new_classes.append(label_encoder.transform([self._output_class])[0])
+            else:
+                if cls == self._input_class:
+                    if self._output_class in new_classes:
+                        continue
+                    else:
+                        new_classes.append(self._output_class)
+            if cls not in new_classes:
+                new_classes.append(cls)
+
+        return new_classes
+
+    def _merge_if_single(self, instance: Union[str, int], label_encoder: Optional[LabelEncoder]) -> Union[str, int]:
+        if isinstance(instance, int) or type(instance) in [np.int32, np.int64]:
+            transformed = label_encoder.inverse_transform([instance])[0]
+            if transformed == self._input_class:
+                return label_encoder.transform([self._output_class])[0]
+        else:
+            if instance == self._input_class:
+                return self._output_class
+        return instance
+
+    def merge(self, instance: Union[str, collections.Iterable]) -> Union[str, collections.Iterable]:
+        if isinstance(instance, collections.Iterable) or isinstance(instance, np.ndarray):
+            return self._merge_if_list(instance, None)
+        elif isinstance(instance, str):
+            return self._merge_if_single(instance, None)
+        else:
+            raise TypeError("Unknown type")
+
+    def merge_using_label_encoder(self, instance: Union[int, collections.Iterable],
+                                  label_encoder: LabelEncoder) -> Union[int, collections.Iterable]:
+        if isinstance(instance, collections.Iterable) or isinstance(instance, np.ndarray):
+            return self._merge_if_list(instance, label_encoder)
+        elif isinstance(instance, str) or isinstance(instance, int) or type(instance) in [np.int32, np.int64]:
+            return self._merge_if_single(instance, label_encoder)
+        else:
+            raise TypeError("Unknown type %s" % type(instance))
+
+
+class CompoundMerger(Merger):
+    def __init__(self, mergers: collections.Iterable):
+        super().__init__("", "")
+        self._mergers = mergers
+
+    def merge(self, instance: Union[str, collections.Iterable]) -> Union[str, collections.Iterable]:
+        result = instance
+        for merg in self._mergers:
+            result = merg.merge(result)
+        return result
+
+    def merge_using_label_encoder(self, instance: Union[int, collections.Iterable],
+                                  label_encoder: LabelEncoder):
+        result = instance
+        for merg in self._mergers:
+            result = merg.merge_using_label_encoder(result, label_encoder)
+        return result
+
+
+common_class_merger = CompoundMerger([
+    Merger("warning_pedestrians", "pedestrian_crossing")
+])
+
+
 def get_images(data_path: Path) -> Iterable[Path]:
     return chain(
         data_path.rglob("*.png"),
@@ -33,6 +112,8 @@ def get_augmenters() -> iaa.Sequential:
         iaa.Add((-20, 20)),
         iaa.Multiply((0.8, 1.2)),
         iaa.AdditiveGaussianNoise(0, 0.1),
+        iaa.Invert(p=0.5),
+        iaa.AdditivePoissonNoise(lam=(0, 12)),
         iaa.Affine(
             # scale=(0.8, 1.2),
             translate_percent=(-0.1, 0.1),

@@ -1,6 +1,10 @@
 paths:
   detector: ../production/models/detector_grayscale.pb
-  classifier: ../production/models/classifier.pb
+  #  classifier: ../production/models/classifier_mobilenet.pb
+  #  classifier: ../production/models/classifier_wrn_16_4.pb
+  #  classifier: ../production/models/classifier_shufflenet.pb
+  classifier: ../production/models/classifier_shufflenet_augmentation.pb
+  #  classifier: ../production/models/classifier_mobilenet_correct_grayscales.pb
   label_encoder: ../production/models/label_encoder.pkl
 
 extractor: standard_extractor

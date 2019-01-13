@@ -1,6 +1,7 @@
 import tensorflow as tf
 
 import common
+from common import L2_REGULARIZATION
 
 
 def convo_bn(inputs: tf.Tensor, features: int, kernel_size: int, is_training: bool, stride: int) -> tf.Tensor:
@@ -105,7 +106,7 @@ def construct_model(inputs: tf.Tensor, is_training: bool, num_classes: int) -> t
     net = convo_bn_relu(net, 1024, 1, is_training, 1)
 
     net = tf.reduce_mean(net, axis=[1, 2])
-    net = tf.layers.dense(net, num_classes,
-                          kernel_initializer=tf.keras.initializers.he_normal(),
-                          kernel_regularizer=tf.keras.regularizers.l2(common.L2_REGULARIZATION))
-    return net
+    sign_class = tf.layers.dense(net, num_classes, kernel_initializer=tf.keras.initializers.glorot_uniform(),
+                                 kernel_regularizer=tf.keras.regularizers.l2(L2_REGULARIZATION), name="class")
+    sign_class = tf.add(sign_class, 0, name="output")
+    return sign_class

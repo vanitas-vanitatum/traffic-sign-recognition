@@ -3,7 +3,9 @@ from pathlib import Path
 import numpy as np
 import tensorflow as tf
 
-from classifier.architectures.mobilenet2 import construct_model as mobilenet_construct_model
+from classifier.architectures.shufflenet import construct_model as construct_model
+# from classifier.architectures.mobilenet2 import construct_model as construct_model
+# from classifier.architectures.wrn import construct_model as construct_model
 from classifier.data import DataLoader
 
 
@@ -15,7 +17,7 @@ def model_fn(features, labels, mode, params):
     net = inputs = features["image"]
 
     is_training = mode == tf.estimator.ModeKeys.TRAIN
-    net = mobilenet_construct_model(net, is_training, num_classes)
+    net = construct_model(net, is_training, num_classes)
     logits = tf.add(net, 0, name="output")
     y_pred = tf.nn.softmax(logits=logits)
 

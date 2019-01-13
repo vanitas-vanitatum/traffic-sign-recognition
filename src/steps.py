@@ -7,6 +7,7 @@ from sklearn.preprocessing import LabelEncoder
 
 import common
 from box_extractors import Extractor
+from classifier import common_class_merger
 from model import Model
 from pipeline import Step
 
@@ -79,6 +80,7 @@ class DecodeClassesStep(Step):
         self.check_for_necessary_keys(data)
         input_data = data["predicted_classes"]
         classes_names = self.le.inverse_transform(input_data)
+        classes_names = common_class_merger.merge(classes_names)
         return {
             "classes_names": classes_names
         }

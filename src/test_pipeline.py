@@ -331,9 +331,13 @@ def evaluate_classifier_for_each_class(test_directory: Path,
         predicted_class = main_pipeline.get_intermediate_output("predicted_classes")[0]
         times.append(main_pipeline.timers["classifier"])
 
-        ground_truth.append(label_encoder.transform([a_class])[0])
-        standard_predictions.append(predicted_class)
-        optimistic_predictions.append(optimistic_class)
+        ground_truth.append(common_class_merger.merge_using_label_encoder(
+            label_encoder.transform([a_class])[0], label_encoder
+        ).item())
+        standard_predictions.append(
+            common_class_merger.merge_using_label_encoder(predicted_class.item(), label_encoder))
+        optimistic_predictions.append(
+            common_class_merger.merge_using_label_encoder(optimistic_class.item(), label_encoder))
 
     optimistic_recall = metrics.recall_score(ground_truth, optimistic_predictions, average="weighted")
     pessimistic_recall = metrics.recall_score(ground_truth, standard_predictions, average="weighted")
@@ -401,9 +405,21 @@ def evaluate_classifier_for_class_vs_not_sign(test_directory: Path,
         predicted_class = main_pipeline.get_intermediate_output("predicted_classes")[0]
         times.append(main_pipeline.timers["classifier"])
 
-        ground_truth.append(int(class_num_for_not_a_sign == label_encoder.transform([a_class])[0]))
-        standard_predictions.append(int(class_num_for_not_a_sign == predicted_class))
-        optimistic_predictions.append(int(class_num_for_not_a_sign == optimistic_class))
+        ground_truth.append(
+            int(class_num_for_not_a_sign == common_class_merger.merge_using_label_encoder(
+                label_encoder.transform([a_class])[0], label_encoder
+            ))
+        )
+        standard_predictions.append(
+            int(class_num_for_not_a_sign == common_class_merger.merge_using_label_encoder(
+                predicted_class, label_encoder
+            ))
+        )
+        optimistic_predictions.append(
+            int(class_num_for_not_a_sign == common_class_merger.merge_using_label_encoder(
+                optimistic_class, label_encoder
+            ))
+        )
 
     optimistic_recall = metrics.recall_score(ground_truth, optimistic_predictions, average="weighted")
     pessimistic_recall = metrics.recall_score(ground_truth, standard_predictions, average="weighted")
@@ -452,6 +468,7 @@ def plot_confusion_matrix(cm, classes, output_path: Path,
     plt.imshow(cm, interpolation='nearest', cmap=cmap)
     plt.title(title)
     plt.colorbar()
+    classes = common_class_merger.merge(classes)
     tick_marks = np.arange(len(classes))
     plt.xticks(tick_marks, classes, rotation=90)
     plt.yticks(tick_marks, classes)

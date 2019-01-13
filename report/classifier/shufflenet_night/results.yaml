@@ -1,0 +1,20 @@
+normal classification:
+    accuracy: 0.9623099527277373
+    mean processing time: 0.01174536370108082
+    optimistic accuracy: 0.9560495719943785
+    optimistic precision: 0.9616718265960562
+    optimistic recall: 0.9560495719943785
+    precision: 0.9674714420484469
+    recall: 0.9623099527277373
+    std processing time: 0.014857312159573102
+sign vs not sign:
+    accuracy: 0.9922064648013287
+    auc: 0.9664987809786715
+    mean processing time: 0.01000444977710237
+    optimistic accuracy: 0.9862016098121886
+    optimistic auc: 0.9818486649325852
+    optimistic precision: 0.9871682400623282
+    optimistic recall: 0.9862016098121886
+    precision: 0.9921659443472055
+    recall: 0.9922064648013287
+    std processing time: 0.0011851876518142615
