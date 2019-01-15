@@ -18,3 +18,4 @@ sign vs not sign:
     precision: 0.9921659443472055
     recall: 0.9922064648013287
     std processing time: 0.0011851876518142615
+num_params: 1865194

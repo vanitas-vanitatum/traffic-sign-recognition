@@ -1,13 +1,10 @@
-from typing import *
-
-import imutils
 import tqdm
 import yaml
 
 from box_extractors import EXTRACTORS
 from classifier import Classifier
 from detector import Detector
-from pipeline import Pipeline
+from pipeline import *
 from steps import *
 
 with open(common.CONFIG_PATH) as f:
@@ -41,6 +38,12 @@ visualisation_pipeline = main_pipeline + [
     )
 ]
 
+without_showing = main_pipeline + [
+    VisualiseStep(
+        "visualise"
+    )
+]
+
 
 class Recorder:
     def __init__(self, output_file: Optional[str]):
@@ -62,6 +65,28 @@ class Recorder:
     def __del__(self):
         if self.video_writer:
             self.video_writer.release()
+
+
+def process_frame_by_frame_multithreaded(video_file: str, output_path: Optional[str]):
+    processor = MultiThreadedProcessor(video_file, without_showing)
+    recorder = Recorder(output_path)
+    i = 0
+    processor = processor.start()
+    with tqdm.tqdm() as pbar:
+        while not processor.stopped:
+            frame = processor.read()
+            if frame is None:
+                continue
+            cv2.imshow('frame', frame)
+            # recorder.record_frame(frame)
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
+            i += 1
+            pbar.update(1)
+            # processor.update()
+            # processor.predict()
+    processor.stop()
+    cv2.destroyAllWindows()
 
 
 def process_frame_by_frame(video_file: str, output_path: Optional[str]):
@@ -126,5 +151,6 @@ if __name__ == '__main__':
 
     if args.video is not None:
         process_frame_by_frame(args.video, args.output_path)
+        # process_frame_by_frame_multithreaded(args.video, args.output_path)
     else:
         process_from_camera(args.output_path)

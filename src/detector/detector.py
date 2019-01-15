@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 import tensorflow as tf
+from tensorflow.python.framework import tensor_util
 
 import common
 from detector import lanms
@@ -29,6 +30,14 @@ class Detector(Model):
         self._inputs = self._graph.get_tensor_by_name("import/input_images:0")
         self._f_score = self._graph.get_tensor_by_name("import/feature_fusion/score:0")
         self._f_geometry = self._graph.get_tensor_by_name("import/feature_fusion/geometry:0")
+
+        total_params = 0
+        for node in self._graph.as_graph_def().node:
+            if node.op == "Const":
+                nd_array = tensor_util.MakeNdarray(node.attr['value'].tensor)
+                total_params += np.prod(nd_array.shape, dtype=np.int32)
+
+        print("Detector params: {}".format(total_params))
 
     def resize_image(self, im, max_side_len=512):
         """

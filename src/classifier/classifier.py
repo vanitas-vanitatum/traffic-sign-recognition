@@ -2,6 +2,7 @@ from typing import *
 
 import numpy as np
 import tensorflow as tf
+from tensorflow.python.framework import tensor_util
 
 from model import Model
 from utils.math_utils import softmax
@@ -28,6 +29,13 @@ class Classifier(Model):
         self.sess = tf.Session(graph=self._graph)
         self._inputs = self._graph.get_tensor_by_name("input_images:0")
         self._output = self._graph.get_tensor_by_name("output:0")
+        total_params = 0
+        for node in self._graph.as_graph_def().node:
+            if node.op == "Const":
+                nd_array = tensor_util.MakeNdarray(node.attr['value'].tensor)
+                total_params += np.prod(nd_array.shape, dtype=np.int32)
+
+        print("Classifier params: {}".format(total_params))
 
     def predict(self, x: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         if len(x) == 0:

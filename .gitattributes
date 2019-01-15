@@ -10,3 +10,8 @@ production/models/yolo/yolov3.h5 filter=lfs diff=lfs merge=lfs -text
 production/models/yolo/yolov3.weights filter=lfs diff=lfs merge=lfs -text
 production/models/yolo/checkpoint filter=lfs diff=lfs merge=lfs -text
 production/models/classifier_mobilenet_correct_grayscales.pb filter=lfs diff=lfs merge=lfs -text
+demo.mp4 filter=lfs diff=lfs merge=lfs -text
+day_ssd.mp4 filter=lfs diff=lfs merge=lfs -text
+demo_ssd.mp4 filter=lfs diff=lfs merge=lfs -text
+demo_yolo.mp4 filter=lfs diff=lfs merge=lfs -text
+night_ssd.mp4 filter=lfs diff=lfs merge=lfs -text
