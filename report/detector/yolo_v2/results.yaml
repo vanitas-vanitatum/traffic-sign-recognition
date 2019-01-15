@@ -1,0 +1,191 @@
+0.5:
+    american:
+        iou: 0.3848297079354761
+        mean processing time: 0.8427378346703269
+        optimistic iou: 0.6444757865936269
+        optimistic precision: 0.9529411764705882
+        optimistic recall: 0.7788461538461539
+        precision: 0.8353018626805527
+        recall: 0.5024692508386103
+        std processing time: 4.982842369745227
+    chinese:
+        iou: 0.6405342500116056
+        mean processing time: 0.6047611231803894
+        optimistic iou: 0.7210134743253666
+        optimistic precision: 0.9855072463768116
+        optimistic recall: 0.8292682926829268
+        precision: 0.9782608695652109
+        recall: 0.7682926829268292
+        std processing time: 0.005709553413008036
+0.55:
+    american:
+        iou: 0.3910314756446032
+        mean processing time: 0.6110831572792746
+        optimistic iou: 0.6446624948680008
+        optimistic precision: 0.9425287356321839
+        optimistic recall: 0.7884615384615384
+        precision: 0.802728346606711
+        recall: 0.4907286619455803
+        std processing time: 0.037462444217809934
+    chinese:
+        iou: 0.6486558851583298
+        mean processing time: 0.60509312915802
+        optimistic iou: 0.7282580132486182
+        optimistic precision: 0.9716312056737588
+        optimistic recall: 0.8353658536585366
+        precision: 0.9427710843373435
+        recall: 0.7634146341463414
+        std processing time: 0.005958686969937701
+0.6:
+    american:
+        iou: 0.3777019431438501
+        mean processing time: 0.6062729423696345
+        optimistic iou: 0.6408007696994402
+        optimistic precision: 0.9069767441860465
+        optimistic recall: 0.75
+        precision: 0.7479623076617206
+        recall: 0.4382221393961955
+        std processing time: 0.005784784809621212
+    chinese:
+        iou: 0.6409614233795838
+        mean processing time: 0.6346113362312317
+        optimistic iou: 0.7235039350768124
+        optimistic precision: 0.9562043795620438
+        optimistic recall: 0.7987804878048781
+        precision: 0.9152542372881296
+        recall: 0.724390243902439
+        std processing time: 0.07024968900772875
+0.65:
+    american:
+        iou: 0.38620992796264836
+        mean processing time: 0.6770190741799095
+        optimistic iou: 0.6413668086512437
+        optimistic precision: 0.8372093023255814
+        optimistic recall: 0.6923076923076923
+        precision: 0.6699560977504927
+        recall: 0.40169586284010184
+        std processing time: 0.0595449919176582
+    chinese:
+        iou: 0.6431851148056912
+        mean processing time: 0.6602320680618287
+        optimistic iou: 0.7291604190750867
+        optimistic precision: 0.920863309352518
+        optimistic recall: 0.7804878048780488
+        precision: 0.8562691131498414
+        recall: 0.6829268292682925
+        std processing time: 0.006686542638683726
+0.7:
+    american:
+        iou: 0.389318009336584
+        mean processing time: 0.6284097359397195
+        optimistic iou: 0.6394271009970771
+        optimistic precision: 0.788235294117647
+        optimistic recall: 0.6442307692307693
+        precision: 0.6007642722044212
+        recall: 0.36256056653000146
+        std processing time: 0.05223708523345902
+    chinese:
+        iou: 0.640060919162134
+        mean processing time: 0.7914547491073608
+        optimistic iou: 0.7215892250360428
+        optimistic precision: 0.8357142857142857
+        optimistic recall: 0.7134146341463414
+        precision: 0.7816793893129722
+        recall: 0.6243902439024389
+        std processing time: 0.1981993833720029
+0.75:
+    american:
+        iou: 0.3894312101373316
+        mean processing time: 0.6712547961148349
+        optimistic iou: 0.6446738695795741
+        optimistic precision: 0.7176470588235294
+        optimistic recall: 0.5865384615384616
+        precision: 0.4995532071953047
+        recall: 0.29952478568766117
+        std processing time: 0.055601126741979055
+    chinese:
+        iou: 0.6489530888585818
+        mean processing time: 0.6599825773239135
+        optimistic iou: 0.7336943420558216
+        optimistic precision: 0.7285714285714285
+        optimistic recall: 0.6219512195121951
+        precision: 0.6484018264840139
+        recall: 0.519512195121951
+        std processing time: 0.006081649095491153
+0.8:
+    american:
+        iou: 0.3980493580562065
+        mean processing time: 0.6614910953695123
+        optimistic iou: 0.6465022107911258
+        optimistic precision: 0.5287356321839081
+        optimistic recall: 0.4423076923076923
+        precision: 0.3359879222494796
+        recall: 0.20737048080506765
+        std processing time: 0.006077163545071287
+    chinese:
+        iou: 0.6459969740516182
+        mean processing time: 0.660719566822052
+        optimistic iou: 0.7258757513305067
+        optimistic precision: 0.5107913669064749
+        optimistic recall: 0.4329268292682927
+        precision: 0.41389728096676465
+        recall: 0.33414634146341454
+        std processing time: 0.006155222484211469
+0.85:
+    american:
+        iou: 0.3828352313500583
+        mean processing time: 0.6612943636287343
+        optimistic iou: 0.6460644426469803
+        optimistic precision: 0.36470588235294116
+        optimistic recall: 0.2980769230769231
+        precision: 0.1913886824918846
+        recall: 0.11400484532239959
+        std processing time: 0.00586889284827092
+    chinese:
+        iou: 0.6475049585407837
+        mean processing time: 0.6619211473464965
+        optimistic iou: 0.7250170019681587
+        optimistic precision: 0.30656934306569344
+        optimistic recall: 0.25609756097560976
+        precision: 0.23006134969325012
+        recall: 0.18292682926829265
+        std processing time: 0.013196813133446722
+0.9:
+    american:
+        iou: 0.3910863807995447
+        mean processing time: 0.6625702879645607
+        optimistic iou: 0.654018743465214
+        optimistic precision: 0.20689655172413793
+        optimistic recall: 0.17307692307692307
+        precision: 0.0761956228046471
+        recall: 0.04598397316436796
+        std processing time: 0.02075499917721064
+    chinese:
+        iou: 0.6445214560273526
+        mean processing time: 0.6606630363464355
+        optimistic iou: 0.7247669040223182
+        optimistic precision: 0.09420289855072464
+        optimistic recall: 0.07926829268292683
+        precision: 0.05214723926380334
+        recall: 0.04146341463414634
+        std processing time: 0.014219300948069459
+0.95:
+    american:
+        iou: 0.3821111428214296
+        mean processing time: 0.6674508601968938
+        optimistic iou: 0.6451062245394842
+        optimistic precision: 0.047058823529411764
+        optimistic recall: 0.038461538461538464
+        precision: 0.010985992859104598
+        recall: 0.006522549385016731
+        std processing time: 0.03723916815122649
+    chinese:
+        iou: 0.6460729351508142
+        mean processing time: 0.6405194640159607
+        optimistic iou: 0.7333023947965494
+        optimistic precision: 0.014388489208633094
+        optimistic recall: 0.012195121951219513
+        precision: 0.0030395136778115306
+        recall: 0.002439024390243902
+        std processing time: 0.055637046495881325
+num_params: 50579069

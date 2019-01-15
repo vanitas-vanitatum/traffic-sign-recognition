@@ -188,3 +188,5 @@
         precision: 0.0021008403361344407
         recall: 0.001219512195121951
         std processing time: 0.011709081173858915
+
+num_params: 3096793

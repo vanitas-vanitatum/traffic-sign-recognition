@@ -3,6 +3,7 @@ import os
 import numpy as np
 import tensorflow as tf
 from PIL import Image
+from tensorflow.python.framework import tensor_util
 
 import common
 from detector.yolo.detect_function import predict
@@ -51,6 +52,13 @@ class Detector(Model):
             saver.restore(self.sess, model_path)
 
             self._output = boxes
+
+        total_params = 0
+        for node in self._graph.as_graph_def().node:
+            if node.op == "Const":
+                nd_array = tensor_util.MakeNdarray(node.attr['value'].tensor)
+                total_params += np.prod(nd_array.shape, dtype=np.int32)
+        print("Detector params: {}".format(total_params))
 
     def predict(self, x: np.ndarray) -> np.ndarray:
         results = []

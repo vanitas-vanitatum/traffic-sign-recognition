@@ -1,6 +1,6 @@
-import cv2
 import numpy as np
 import tensorflow as tf
+from tensorflow.python.framework import tensor_util
 
 import common
 from model import Model
@@ -35,6 +35,14 @@ class Detector(Model):
                 tensor_dict[key] = self._graph.get_tensor_by_name(tensor_name)
         self._inputs = self._graph.get_tensor_by_name("image_tensor:0")
         self._output = tensor_dict
+
+        total_params = 0
+        for node in self._graph.as_graph_def().node:
+            if node.op == "Const":
+                nd_array = tensor_util.MakeNdarray(node.attr['value'].tensor)
+                total_params += np.prod(nd_array.shape, dtype=np.int32)
+
+        print("Detector params: {}".format(total_params))
 
     def predict(self, x: np.ndarray) -> np.ndarray:
         results = []
