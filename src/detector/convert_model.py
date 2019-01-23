@@ -1,40 +1,33 @@
 import argparse
+import os
 
 import tensorflow as tf
 
-from detector.model import model_fn
+from detector.model import model
 
 
-def serving_input_receiver():
-    serialised_input = tf.placeholder(dtype=tf.float32,
-                                      shape=[None, None, None, 3],
-                                      name="input_images")
-    receiver_tensor = {"image": serialised_input}
-    receiver = tf.estimator.export.build_raw_serving_input_receiver_fn(
-        features=receiver_tensor, default_batch_size=None
-    )
-    return receiver
+def dump_model_to_correct_pbtxt(checkpoint_path: str, output_path: str):
+    if os.path.exists(output_path):
+        raise ValueError("Given path already exists!: %s" % output_path)
+    with tf.get_default_graph().as_default():
+        inputs = tf.placeholder(tf.float32, shape=[None, None, None, 3], name='input_images')
+        global_step = tf.get_variable('global_step', [], dtype=tf.int64, initializer=tf.constant_initializer(0),
+                                      trainable=False)
 
+        f_score, f_geometry = model(inputs, 512, is_training=True)
+        saver = tf.train.Saver()
+        with tf.Session() as sess:
+            ckpt_state = tf.train.get_checkpoint_state(checkpoint_path)
+            model_path = os.path.join(checkpoint_path, os.path.basename(ckpt_state.model_checkpoint_path))
+            print('Restore from {}'.format(model_path))
+            saver.restore(sess, model_path)
 
-def create_model(model_path: str) -> tf.estimator.Estimator:
-    model = tf.estimator.Estimator(model_fn=model_fn,
-                                   params={
-                                       "text_scale": 512,
-                                       "learning_rate": 0.001,
-                                   },
-                                   config=tf.estimator.RunConfig(
-                                       log_step_count_steps=20,
-                                       save_checkpoints_steps=20,
-                                       save_summary_steps=20,
-                                   ),
-                                   model_dir=model_path)
-    return model
+            tf.train.write_graph(sess.graph_def, os.path.dirname(output_path), os.path.basename(output_path))
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("-m", "--model_folder", help="Model dir")
+    parser.add_argument("-o", "--output_folder", help="Output directory")
     args = parser.parse_args()
-    m = create_model(args.model_folder)
-    m.export_saved_model(args.model_folder,
-                         serving_input_receiver())
+    dump_model_to_correct_pbtxt(args.model_folder, args.output_folder)

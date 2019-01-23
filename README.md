@@ -1,5 +1,5 @@
 # traffic-sign-recognition
-Automatic detection and classiffication of polish traffic signs
+Automatic detection and classification of polish traffic signs
 
 ## Converting models
 1. Train model using appropriate script (`train.py`)

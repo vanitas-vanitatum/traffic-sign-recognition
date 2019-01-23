@@ -83,7 +83,6 @@ def loss(y_true_cls, y_pred_cls,
     """
     classification_loss = dice_coefficient(y_true_cls, y_pred_cls, training_mask)
     # scale classification loss to match the iou loss part
-    classification_loss *= 0.01
 
     # d1 -> top, d2->right, d3->bottom, d4->left
     d1_gt, d2_gt, d3_gt, d4_gt, theta_gt = tf.split(value=y_true_geo, num_or_size_splits=5, axis=3)
@@ -98,7 +97,7 @@ def loss(y_true_cls, y_pred_cls,
     L_theta = 1 - tf.cos(theta_pred - theta_gt)
     tf.summary.scalar('geometry_AABB', tf.reduce_mean(L_AABB * y_true_cls * training_mask))
     tf.summary.scalar('geometry_theta', tf.reduce_mean(L_theta * y_true_cls * training_mask))
-    L_g = L_AABB + 20 * L_theta
+    L_g = L_AABB +  L_theta
 
     return tf.reduce_mean(L_g * y_true_cls * training_mask) + classification_loss
 
@@ -162,6 +161,6 @@ def model_fn(features, labels, mode, params):
 
 
 if __name__ == '__main__':
-    tf.app.flags.DEFINE_integer('text_scale', 512, '')
-    FLAGS = tf.app.flags.FLAGS
+    tf.flags.DEFINE_integer('text_scale', 512, '')
+    FLAGS = tf.flags.FLAGS
     tf.app.run()

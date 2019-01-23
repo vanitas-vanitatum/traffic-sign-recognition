@@ -56,7 +56,7 @@ if __name__ == '__main__':
     tf.flags.DEFINE_string('train_data', '', '')
     tf.flags.DEFINE_string('test_data', '', '')
     tf.flags.DEFINE_string('model_folder', 'wololo', '')
-    tf.flags.DEFINE_float('learning_rate', 0.001, '')
+    tf.flags.DEFINE_float('learning_rate', 0.0001, '')
     FLAGS = tf.flags.FLAGS
 
     tf.app.run()

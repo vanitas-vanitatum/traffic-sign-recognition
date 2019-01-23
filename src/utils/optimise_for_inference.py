@@ -50,6 +50,11 @@ bazel-bin/tensorflow/python/tools/optimize_for_inference \
 
 
 """
+
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+
 import argparse
 import os
 import sys
@@ -82,7 +87,7 @@ def main(unused_args):
         input_graph_def,
         FLAGS.input_names.split(","),
         FLAGS.output_names.split(","),
-        _parse_placeholder_types(FLAGS.placeholder_type_enum),
+        FLAGS.placeholder_type_enum,
         FLAGS.toco_compatible)
 
     if FLAGS.frozen_graph:
@@ -93,12 +98,6 @@ def main(unused_args):
                              os.path.dirname(FLAGS.output),
                              os.path.basename(FLAGS.output))
     return 0
-
-
-def _parse_placeholder_types(values):
-    """Extracts placeholder types from a comma separate list."""
-    values = [int(value) for value in values.split(",")]
-    return values if len(values) > 1 else values[0]
 
 
 def parse_args():
@@ -137,12 +136,9 @@ def parse_args():
       """)
     parser.add_argument(
         "--placeholder_type_enum",
-        type=str,
-        default=str(dtypes.float32.as_datatype_enum),
-        help="""\
-      The AttrValue enum to use for placeholders.
-      Or a comma separated list, one value for each placeholder.\
-      """)
+        type=int,
+        default=dtypes.float32.as_datatype_enum,
+        help="The AttrValue enum to use for placeholders.")
     parser.add_argument(
         "--toco_compatible",
         type=bool,
