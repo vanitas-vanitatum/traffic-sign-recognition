@@ -125,7 +125,7 @@ def balance_train_and_test(train_path, test_path):
 
 
 if __name__ == '__main__':
-    from src.data_preprocessing.classification.ruleset import CLASSES
+    from src.data_preprocessing.classification.ruleset import CLASSES, SPEED_LIMIT_CLASSES
 
     DATA_PATH = '/home/mkosturek/pwr/masters/sem2/computer_vision/traffic-sign-recognition/data/'
     shutil.rmtree(DATA_PATH + 'classification/train')
@@ -144,18 +144,18 @@ if __name__ == '__main__':
 
     print('TEST preparation')
 
-    belg_test = FolderDividedDataset(DATA_PATH + BELGIUM_PATH + 'test/', CLASSES, DATA_PATH + BELGIUM_DICT, 'Belgium')
+    belg_test = FolderDividedDataset(DATA_PATH + BELGIUM_PATH + 'test/', CLASSES + SPEED_LIMIT_CLASSES, DATA_PATH + BELGIUM_DICT, 'Belgium')
     #gtsrb_test = FolderDividedDataset(DATA_PATH + GTSRB_PATH + 'test/', CLASSES, DATA_PATH + GTSRB_DICT, 'GTSRB')
-    tsrd_test = TsrdDataset(DATA_PATH + TSRD_PATH + 'test/', CLASSES, DATA_PATH + TSRD_DICT)
+    tsrd_test = TsrdDataset(DATA_PATH + TSRD_PATH + 'test/', CLASSES + SPEED_LIMIT_CLASSES, DATA_PATH + TSRD_DICT)
 
     test_dset = MultipleDatasetsInterface([belg_test, tsrd_test])
     test_dset.process_dataset(DATA_PATH + 'classification/test/')
 
     print('TRAIN preparation')
 
-    belg_train = FolderDividedDataset(DATA_PATH + BELGIUM_PATH + 'train/', CLASSES, DATA_PATH + BELGIUM_DICT, 'Belgium')
-    gtsrb_train = FolderDividedDataset(DATA_PATH + GTSRB_PATH + 'train/', CLASSES, DATA_PATH + GTSRB_DICT, 'GTSRB')
-    tsrd_train = TsrdDataset(DATA_PATH + TSRD_PATH + 'train/', CLASSES, DATA_PATH + TSRD_DICT)
+    belg_train = FolderDividedDataset(DATA_PATH + BELGIUM_PATH + 'train/', CLASSES + SPEED_LIMIT_CLASSES, DATA_PATH + BELGIUM_DICT, 'Belgium')
+    gtsrb_train = FolderDividedDataset(DATA_PATH + GTSRB_PATH + 'train/', CLASSES + SPEED_LIMIT_CLASSES, DATA_PATH + GTSRB_DICT, 'GTSRB')
+    tsrd_train = TsrdDataset(DATA_PATH + TSRD_PATH + 'train/', CLASSES + SPEED_LIMIT_CLASSES, DATA_PATH + TSRD_DICT)
 
     train_dset = MultipleDatasetsInterface([belg_train, gtsrb_train, tsrd_train])
     train_dset.process_dataset(DATA_PATH + 'classification/train/', initial_id=len(test_dset))

@@ -15,6 +15,7 @@ class DataInterface:
     def save_detection_sample(destination_path, sample_id, image, annotation, save_image=True, save_annot=True):
         if save_image:
             cv2.imwrite(f'{destination_path}/img_{sample_id}.jpg', image)
+
         if save_annot:
             with open(f'{destination_path}/img_{sample_id}.txt', 'w') as f:
                 f.write(annotation)

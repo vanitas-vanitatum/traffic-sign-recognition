@@ -10,6 +10,9 @@ class Predicate:
     def __mul__(self, value):
         return AndPredicate(self, value)
 
+    def __and__(self, other):
+        return AndPredicate(self, other)
+
     def then(self, inference):
         return Rule(self, inference)
 
@@ -57,6 +60,15 @@ class IfClassIn(Predicate):
 
     def __call__(self, sample: Sample) -> bool:
         return sample.label in self.classes
+
+
+class IfClassStartsWith(Predicate):
+    def __init__(self, phrase):
+        self.phrase = phrase
+
+    def __call__(self, sample: Sample) -> bool:
+        return sample.label.startswith(self.phrase)
+
 
 class IfTrue(Predicate):
 
